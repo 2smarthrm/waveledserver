@@ -590,8 +590,7 @@ app.get(
   "/api/products",
   query("q").optional().isString(),
   query("category").optional().isString(),
-  validation,
-  audit("products.list"),
+  validation, 
   asyncH(async (req, res) => {
     const { q, category } = req.query;
     const filter = {};
