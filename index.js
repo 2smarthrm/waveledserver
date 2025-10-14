@@ -71,7 +71,7 @@ app.get("/", async (req, res) => {
     res.status(200).json({ ok: true, data });
   } catch (e) {
     console.error("Erro a listar produtos:", e?.message || e);
-    res.status(500).json({ ok: false, error: "Falha ao obter produtos" });
+    res.status(500).json({ ok: false, error: "Falha ao obter produtos", error: "Erro a listar produtos:", e?.message || e });
   }
 });
 
