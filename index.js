@@ -1,8 +1,9 @@
- 
+/// a ideia é alatera aqui, onde é que eu posso alterar ? 
 
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import express from "express";
 import mongoose from "mongoose";
 import helmet from "helmet";
@@ -41,18 +42,100 @@ const ALLOWED_ORIGINS = [
 ];
 
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
+
+
+
+
+
+
+// --- substituir deste ponto em diante ---
+ 
+
+// Escolhe diretório gravável (env > /tmp em serverless > ./uploads em dev)
+function resolveUploadDir() {
+  const fromEnv = process.env.UPLOAD_DIR?.trim();
+  if (fromEnv) return path.resolve(fromEnv);
+
+  const isServerless =
+    !!process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    !!process.env.VERCEL ||
+    !!process.env.NETLIFY;
+
+  return isServerless ? path.join(os.tmpdir(), "uploads") : path.resolve("./uploads");
+}
+
+let UPLOAD_DIR = resolveUploadDir();
+
+// Cria diretório com fallback seguro para /tmp/uploads
+function ensureDir(p) {
+  try {
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+    return p;
+  } catch (err) {
+    console.warn("[uploads] Falhou criar", p, "→", err.message);
+    const fallback = path.join(os.tmpdir(), "uploads");
+    if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
+    console.warn("[uploads] A usar fallback:", fallback);
+    return fallback;
+  }
+}
+
+UPLOAD_DIR = ensureDir(UPLOAD_DIR);
+console.log("[uploads] Dir:", UPLOAD_DIR);
+
+// mantém o teu ENC_KEY como está
 const ENC_KEY = Buffer.from(
   process.env.ENC_KEY_BASE64 ||
     "b8wXnR8j6r5w2KphF5sOeYlM5wqF7X2+VnZWQprP7Ks=",
   "base64"
-);  
+);
 
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (ENC_KEY.length !== 32) {
   console.error("ENC_KEY_BASE64 inválida (requer 32 bytes Base64).");
   process.exit(1);
 }
+// --- até aqui ---
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
  
 let transporter;
