@@ -846,8 +846,7 @@ app.post(
 
 // =============================== PRODUTOS (CRUD) =============================
 app.post(
-  "/api/products",
-  limiterAuth,
+  "/api/products", 
   requireAuth(["admin", "editor"]),
   upload.array("images", 12),
   body("name").isString().isLength({ min: 2 }).trim(),
@@ -915,8 +914,7 @@ app.get(
 );
 
 app.put(
-  "/api/products/:id",
-  limiterAuth,
+  "/api/products/:id", 
   requireAuth(["admin", "editor"]),
   upload.array("images", 12),
   param("id").isMongoId(),
@@ -948,8 +946,7 @@ app.put(
 );
 
 app.delete(
-  "/api/products/:id",
-  limiterAuth,
+  "/api/products/:id", 
   requireAuth(["admin"]),
   param("id").isMongoId(),
   validate,
@@ -963,8 +960,7 @@ app.delete(
 
 // Likes
 app.post(
-  "/api/products/:id/like",
-  limiterAuth,
+  "/api/products/:id/like", 
   requireAuth(["admin", "editor", "viewer"]),
   param("id").isMongoId(),
   validate,
@@ -981,8 +977,7 @@ app.post(
 );
 
 app.post(
-  "/api/products/:id/unlike",
-  limiterAuth,
+  "/api/products/:id/unlike", 
   requireAuth(["admin", "editor", "viewer"]),
   param("id").isMongoId(),
   validate,
