@@ -1,6 +1,6 @@
 {
   "functions": {
-    "/index.js": {
+    "index.js": {
       "runtime": "nodejs18.x",
       "memory": 1024,
       "maxDuration": 10
@@ -9,7 +9,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/index.js"
+      "dest": "index.js"
     }
   ]
 }
