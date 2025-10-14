@@ -1,6 +1,6 @@
 /// a ideia é alatera aqui, onde é que eu posso alterar ? 
 
-import dotenv from "dotenv";
+ 
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -21,8 +21,7 @@ import { nanoid } from "nanoid";
 import session from "express-session";
 import MongoStore from "connect-mongo";
  const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; // simples e permissivo
-dotenv.config();
-
+ 
 
 import dns from "dns";
 dns.setDefaultResultOrder?.("ipv4first");
