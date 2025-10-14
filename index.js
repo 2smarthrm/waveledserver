@@ -32,15 +32,12 @@ mongoose.set("bufferCommands", false);
 
 
 // --------------------------------- ENV ---------------------------------------
-const PORT = process.env.PORT || 4000;
-const MONGO_URI =
-  process.env.MONGO_URI ||
-  "mongodb+srv://2smarthrm_db_user:afMz4WEnx9is1N3O@cluster0.7p7g2qd.mongodb.net/";
-const SESSION_SECRET =
-  process.env.SESSION_SECRET || crypto.randomBytes(48).toString("hex");
-const COOKIE_NAME = process.env.COOKIE_NAME || "wl_sid";
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || "localhost";
-const COOKIE_SECURE = String(process.env.COOKIE_SECURE || "false") === "true";
+const PORT =   4000;
+const MONGO_URI =  "mongodb+srv://2smarthrm_db_user:afMz4WEnx9is1N3O@cluster0.7p7g2qd.mongodb.net/";
+const SESSION_SECRET = crypto.randomBytes(48).toString("hex");
+const COOKIE_NAME =  "wl_sid";
+const COOKIE_DOMAIN =   "localhost";
+const COOKIE_SECURE = String( "false") === "true";
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://localhost:3001",
@@ -60,16 +57,8 @@ const ALLOWED_ORIGINS = [
  
 
 // Escolhe diretório gravável (env > /tmp em serverless > ./uploads em dev)
-function resolveUploadDir() {
-  const fromEnv = process.env.UPLOAD_DIR?.trim();
-  if (fromEnv) return path.resolve(fromEnv);
-
-  const isServerless =
-    !!process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    !!process.env.VERCEL ||
-    !!process.env.NETLIFY;
-
-  return isServerless ? path.join(os.tmpdir(), "uploads") : path.resolve("./uploads");
+function resolveUploadDir() { 
+  return  path.resolve("./uploads");
 }
 
 let UPLOAD_DIR = resolveUploadDir();
@@ -92,9 +81,7 @@ UPLOAD_DIR = ensureDir(UPLOAD_DIR);
 console.log("[uploads] Dir:", UPLOAD_DIR);
 
 // mantém o teu ENC_KEY como está
-const ENC_KEY = Buffer.from(
-  process.env.ENC_KEY_BASE64 ||
-    "b8wXnR8j6r5w2KphF5sOeYlM5wqF7X2+VnZWQprP7Ks=",
+const ENC_KEY = Buffer.from(  "b8wXnR8j6r5w2KphF5sOeYlM5wqF7X2+VnZWQprP7Ks=",
   "base64"
 );
 
@@ -147,7 +134,8 @@ if (ENC_KEY.length !== 32) {
 
  
 let transporter;
-if (process.env.USE_SENDMAIL === "true") {
+const USE_SENDMAIL = false;
+if (USE_SENDMAIL === "true") {
   transporter = nodemailer.createTransport({
     sendmail: true,
     newline: "unix",
@@ -155,11 +143,11 @@ if (process.env.USE_SENDMAIL === "true") {
   });
 } else {
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
+    host: "",
+    port: Number(587),
     secure: false,
-    auth: process.env.SMTP_USER
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    auth:""
+      ? { user:"", pass:""}
       : undefined,
   });
 }
@@ -688,7 +676,7 @@ app.post(
 
     try {
       await transporter.sendMail({
-        from: process.env.MAIL_FROM || '"Waveled" <no-reply@waveled.pt>',
+        from:'"Waveled" <no-reply@waveled.pt>',
         to: "comercial@waveled.pt, geral@waveled.pt",
         subject: `Waveled • Novo pedido (${payload.tipo}) de ${payload.nome}`,
         html,
@@ -823,8 +811,8 @@ app.post(
     `;
     try {
       await transporter.sendMail({
-        from: process.env.MAIL_FROM || '"Waveled" <no-reply@waveled.pt>',
-        to: process.env.MAIL_TO || "comercial@waveled.pt, geral@waveled.pt",
+        from:'"Waveled" <no-reply@waveled.pt>',
+        to:"comercial@waveled.pt, geral@waveled.pt",
         subject: `Waveled • Novo pedido (${payload.tipo}) de ${payload.nome}`,
         html,
       });
