@@ -23,6 +23,14 @@ import MongoStore from "connect-mongo";
  const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; // simples e permissivo
 dotenv.config();
 
+
+import dns from "dns";
+dns.setDefaultResultOrder?.("ipv4first");
+
+mongoose.set("bufferCommands", false);
+
+
+
 // --------------------------------- ENV ---------------------------------------
 const PORT = process.env.PORT || 4000;
 const MONGO_URI =
@@ -213,14 +221,19 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ------------------------------- DB & SESSION --------------------------------
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log("MongoDB ligado"))
-  .catch((err) => {
-    console.error("MongoDB erro:", err);
-    process.exit(1);
-  });
+
+
+
+ 
+
+
+
+
+
+
+
+
+
 
 app.use(
   session({
@@ -1681,13 +1694,6 @@ app.use((errMiddleware, req, res, next) => {
 
 
  
-
-// --- LIGAÇÃO MONGODB + START ROBUSTO ---
-import dns from "dns";
-dns.setDefaultResultOrder?.("ipv4first"); // evita problemas IPv6 em alguns ambientes
-
-mongoose.set("bufferCommands", false); // não enfileirar queries sem ligação
-
  
 async function start() {
   try {
