@@ -27,9 +27,7 @@ dns.setDefaultResultOrder?.("ipv4first");
 // ======== Config/ENV ========
 const IS_PROD = process.env.NODE_ENV === "production";
 const PORT = 4000; // ignorado na Vercel (serverless)
-const MONGO_URI =
-  process.env.MONGO_URI ||
-  "mongodb+srv://2smarthrm_db_user:afMz4WEnx9is1N3O@cluster0.7p7g2qd.mongodb.net/";
+const MONGO_URI = "mongodb+srv://2smarthrm_db_user:afMz4WEnx9is1N3O@cluster0.7p7g2qd.mongodb.net/";
 
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString("hex");
 const COOKIE_NAME = process.env.COOKIE_NAME || "wl_sid";
