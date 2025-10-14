@@ -475,25 +475,7 @@ const WaveledMessage = mongoose.model("WaveledMessage", MessageSchema);
 const WaveledAudit = mongoose.model("WaveledAudit", AuditSchema);
 
 // -------------------------------- Seed mínimo --------------------------------
-(async () => {
-  try {
-    const adminEmail = "admin@waveled.pt";
-    const exists = await WaveledUser.findOne({ wl_email: adminEmail });
-    if (!exists) {
-      const hash = await bcrypt.hash("ChangeMe!2025", 12);
-      await WaveledUser.create({
-        wl_name: "Admin",
-        wl_email: adminEmail,
-        wl_password_hash: hash,
-        wl_role: "admin",
-      });
-      console.log("Admin padrão criado: admin@waveled.pt / ChangeMe!2025");
-    }
-  } catch (e) {
-    console.error("Seed error:", e);
-  }
-})();
-
+ 
 // ------------------------------ Valid & Helpers ------------------------------
 const validate = (req, res, next) => {
   const v = validationResult(req);
@@ -1692,11 +1674,58 @@ app.use((errMiddleware, req, res, next) => {
   return errJson(res, errMiddleware?.message || "Erro interno", 500);
 });
 
-// ================================= START =====================================
-app.listen(PORT, () =>
-  console.log(`Waveled API (sessões) em http://localhost:${PORT}`)
-);
 
 
+
+
+
+
+ 
+
+// --- LIGAÇÃO MONGODB + START ROBUSTO ---
+import dns from "dns";
+dns.setDefaultResultOrder?.("ipv4first"); // evita problemas IPv6 em alguns ambientes
+
+mongoose.set("bufferCommands", false); // não enfileirar queries sem ligação
+
+ 
+async function start() {
+  try {
+    // aumenta tolerância e força IPv4 primeiro
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 20000, // 20s para escolher nó
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+      // family: 4 // alternativa ao dns.setDefaultResultOrder
+    });
+
+    console.log("MongoDB ligado");
+
+    app.listen(PORT, () => {
+      console.log(`Waveled API (sessões) em http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error("Falha na ligação ao Mongo:", err?.message || err);
+    process.exit(1);
+  }
+}
+
+// logs úteis
+mongoose.connection.on("error", (e) => {
+  console.error("Mongo connection error:", e?.message || e);
+});
+mongoose.connection.on("disconnected", () => {
+  console.warn("Mongo desconectado");
+});
+
+start();
+// --- FIM ---
+
+
+
+
+
+
+ 
  
    
