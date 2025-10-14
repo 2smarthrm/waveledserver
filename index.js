@@ -186,6 +186,37 @@ const requireAuth =
     next();
   };
 
+
+
+// --- AUDIT middleware (coloca este bloco antes de usar audit(...) nas rotas) ---
+const audit =
+  (action) =>
+  (req, res, next) => {
+    res.on("finish", () => {
+      // Só tenta gravar se o modelo existir e a ligação estiver ok
+      try {
+        // WaveledAudit é definido mais abaixo; nesta fase já estará inicializado
+        WaveledAudit?.create({
+          wl_actor: req.session?.user?.email || "public",
+          wl_action: action,
+          wl_details: {
+            method: req.method,
+            path: req.originalUrl,
+            status: res.statusCode,
+          },
+          wl_ip: req.ip,
+        }).catch((e) => {
+          console.error("Audit error:", e?.message || e);
+        });
+      } catch (e) {
+        console.error("Audit throw:", e?.message || e);
+      }
+    });
+    next();
+  };
+
+
+
 const limiterStrict = rateLimit({ windowMs: 10 * 60 * 1000 * 1000, max: 8550 });
 const limiterAuth = rateLimit({ windowMs: 10 * 60 * 1000 * 1000, max: 5550 });
 const limiterLogin = rateLimit({ windowMs: 15 * 60 * 1000 * 1000, max: 1555 });
