@@ -1074,15 +1074,18 @@ async function ensureDb() {
 }
 
 // ======== EXPORT PARA VERCEL (Serverless Handler) ========
+app.get(['/favicon.ico','/favicon.png'], (req, res) => res.status(204).end());
+
 export default async function handler(req, res) {
   try {
-    await ensureDb();
+    if (req.url.startsWith('/api/')) await ensureDb();
   } catch (e) {
-    // Se o Mongo falhar, ainda assim responde (evita timeouts da Vercel)
-    return errJson(res, "Falha ao ligar à base de dados", 500);
+    console.error('Mongo connection error:', e?.message || e);
+    return res.status(500).json({ ok:false, error:'Falha ao ligar à base de dados' });
   }
   return app(req, res);
 }
+
 
 // Opcional: desativar bodyParser interno da Vercel se precisares de raw body
 export const config = {
