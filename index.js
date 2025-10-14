@@ -7,7 +7,7 @@ const app = express();
 // 👉 define isto nas ENV da Vercel (Project → Settings → Environment Variables)
 const MONGO_URI =
   process.env.MONGO_URI ||
-  "mongodb+srv://USER:PASSWORD@cluster0.7p7g2qd.mongodb.net/waveled?retryWrites=true&w=majority&appName=waveled";
+  "mongodb+srv://2smarthrm_db_user:afMz4WEnx9is1N3O@cluster0.7p7g2qd.mongodb.net/";
 
 // Conecta 1x por execução (serverless-friendly)
 let mongoPromise = null;
