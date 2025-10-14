@@ -267,10 +267,10 @@ const requireAuth =
     next();
   };
 
-const limiterStrict = rateLimit({ windowMs: 10 * 60 * 1000, max: 8550 });
-const limiterAuth = rateLimit({ windowMs: 10 * 60 * 1000, max: 5550 });
-const limiterLogin = rateLimit({ windowMs: 15 * 60 * 1000, max: 1555 });
-const limiterPublicPost = rateLimit({ windowMs: 5 * 60 * 1000, max: 4055 });
+const limiterStrict = rateLimit({ windowMs: 10 * 60 * 1000*1000, max: 8550 });
+const limiterAuth = rateLimit({ windowMs: 10 * 60 * 1000*1000, max: 5550 });
+const limiterLogin = rateLimit({ windowMs: 15 * 60 * 1000*1000, max: 1555 });
+const limiterPublicPost = rateLimit({ windowMs: 5 * 60 * 1000*1000, max: 4055 });
 
 const audit =
   (action) =>
@@ -1678,6 +1678,13 @@ app.get(
     ok(res, { up: true, ts: new Date().toISOString() })
   )
 );
+
+
+app.get("/", asyncH(async (req, res) =>
+    ok(res, { up: true, ts: new Date().toISOString() })
+  )
+);
+
 
 // ================================= ERRORS ====================================
 // Middleware de erro (4 args)
