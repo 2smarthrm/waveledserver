@@ -37,7 +37,7 @@ const COOKIE_DOMAIN =   "localhost";
 const COOKIE_SECURE = String( "false") === "true";
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "http://localhost:3001",
+  "https://waveled.vercel.app",
   "http://localhost:3000",
   "http://waveled.vercel.app",
   "http://localhost:5174",
