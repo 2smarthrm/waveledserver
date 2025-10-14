@@ -1,24 +1,4 @@
-/* corrigir o meu erro que esta acontecer tentando hospedar o app no vercel e deolver fullocdoe back:
-
-Oct 14 15:38:41.41
-GET
-500
-waveledserver.vercel.app
-/favicon.ico
-[uploads] Dir: /var/task/uploads No exports found in module "/var/task/index.js". Did you forget to export a function or a server? Node.js process exited with exit status: 1. The logs above can help with debugging the issue.
-Oct 14 15:38:27.62
-GET
-500
-waveledserver.vercel.app
-/
-[uploads] Dir: /var/task/uploads No exports found in module "/var/task/index.js". Did you forget to export a function or a server? 
-
-
-my code on index.js
-
-
-
-*/
+ 
 import path from "path";
 import fs from "fs";
 import os from "os";
