@@ -88,48 +88,6 @@ if (ENC_KEY.length !== 32) {
 }
 // --- até aqui ---
 
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
 let transporter;
 const USE_SENDMAIL = false;
 if (USE_SENDMAIL === "true") {
