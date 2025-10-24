@@ -1,4 +1,23 @@
  
+/*
+
+ri/537.36"
+::1 - - [24/Oct/2025:11:41:55 +0000] "GET /api/products HTTP/1.1" 200 - "http://localhost:3002/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+Route error: MongoServerError: E11000 duplicate key error collection: test.waveled_categories index: wl_name_1 dup key: { wl_name: "Painéis OLED Transparentes  | Quiosques digitais" }
+    at InsertOneOperation.execute (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/insert.js:51:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async tryOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:207:20)
+    at async executeOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:75:16)
+    at async Collection.insertOne (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/collection.js:157:16)
+Middleware erro: MongoServerError: E11000 duplicate key error collection: test.waveled_categories index: wl_name_1 dup key: { wl_name: "Painéis OLED Transparentes  | Quiosques digitais" }
+    at InsertOneOperation.execute (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/insert.js:51:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async tryOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:207:20)
+    at async executeOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:75:16)
+    at async Collection.insertOne (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/collection.js:157:16)
+
+*/
+
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -37,22 +56,13 @@ const COOKIE_DOMAIN =   "localhost";
 const COOKIE_SECURE = String( "false") === "true";
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://waveled.vercel.app",
+  "http://localhost:3002",
   "http://localhost:3000",
   "http://waveled.vercel.app",
   "http://localhost:5174",
 ];
-
-
-
-
-
-
-
-
-// --- substituir deste ponto em diante ---
  
-
+ 
 // Escolhe diretório gravável (env > /tmp em serverless > ./uploads em dev)
 function resolveUploadDir() { 
   return  path.resolve("./uploads");
@@ -87,7 +97,8 @@ if (ENC_KEY.length !== 32) {
   process.exit(1);
 }
 // --- até aqui ---
-
+ 
+ 
 let transporter;
 const USE_SENDMAIL = false;
 if (USE_SENDMAIL === "true") {
@@ -163,18 +174,6 @@ app.use((req, _res, next) => {
   if (req.params) deepSanitize(req.params);
   next();
 });
-
-
-
-
- 
-
-
-
-
-
-
-
 
 
 
@@ -312,10 +311,28 @@ const CategorySchema = new Schema(
   {
     wl_name: { type: String, required: true, unique: true },
     wl_slug: { type: String, required: true, unique: true },
+    wl_name_norm: { type: String, index: true, unique: true }, // novo
+    wl_order: { type: Number, default: 0, index: true },
     wl_created_at: { type: Date, default: Date.now },
   },
   { collection: "waveled_categories" }
 );
+
+// Antes de salvar, preenche wl_name_norm (lowercase, sem acentos, espaços colapsados)
+CategorySchema.pre("save", function(next) {
+  const norm = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .replace(/\s+/g, " ")
+      .trim();
+  this.wl_name = this.wl_name.replace(/\s+/g, " ").trim();
+  this.wl_slug = this.wl_slug.toLowerCase().trim();
+  this.wl_name_norm = norm(this.wl_name);
+  next();
+});
+
+
 
 const ProductSchema = new Schema(
   {
@@ -441,14 +458,38 @@ const validate = (req, res, next) => {
 
 const ensureCategory = async (nameOrId) => {
   if (!nameOrId) throw new Error("Categoria inválida");
-  if (mongoose.isValidObjectId(nameOrId))
-    return await WaveledCategory.findById(nameOrId);
-  const slug = String(nameOrId).toLowerCase().replace(/[^\w]+/g, "-");
-  let cat = await WaveledCategory.findOne({ wl_slug: slug });
-  if (!cat)
-    cat = await WaveledCategory.create({ wl_name: nameOrId, wl_slug: slug });
-  return cat;
+
+  // Se já vier um ObjectId, devolve direto
+  if (mongoose.isValidObjectId(nameOrId)) {
+    const byId = await WaveledCategory.findById(nameOrId);
+    if (!byId) throw new Error("Categoria não encontrada");
+    return byId;
+  }
+
+  // Normalização forte do nome (trim + collapse espaços) e slug
+  const raw = String(nameOrId);
+  const name = raw.replace(/\s+/g, " ").trim(); // evita "  |  " virar chaves diferentes
+  const slug = makeSlug(name);
+
+  // 1ª tentativa: upsert idempotente (evita corrida)
+  try {
+    const doc = await WaveledCategory.findOneAndUpdate(
+      { $or: [{ wl_slug: slug }, { wl_name: name }] },
+      { $setOnInsert: { wl_name: name, wl_slug: slug, wl_created_at: new Date() } },
+      { new: true, upsert: true }
+    );
+    return doc;
+  } catch (e) {
+    // Se duas requisições baterem ao mesmo tempo, uma ganha e outra apanha E11000.
+    if (e && e.code === 11000) {
+      // Busca novamente e devolve o existente
+      const again = await WaveledCategory.findOne({ $or: [{ wl_slug: slug }, { wl_name: name }] });
+      if (again) return again;
+    }
+    throw e;
+  }
 };
+
 
 // ============================== AUTH (SESSÕES) ===============================
 app.post(
@@ -945,7 +986,7 @@ app.get(
     // 2) 3 últimos produtos dessa categoria
     const latest3 = await WaveledProduct.find({ wl_category: cat._id })
       .sort({ wl_created_at: -1, _id: -1 })
-      .limit(3)
+      .limit(300)
       .lean();
 
     // 3) Escolher UM produto da categoria que esteja nos TOPS
@@ -1462,130 +1503,433 @@ app.delete(
 // ============================== “ CATEGORIAS ” ================================
 
 
+ //   wl_order: { type: Number, default: 0, index: true }, // <— campo de ordenação
 
-// =============================== CATEGORIES (CRUD) ===============================
+ 
+
+
+
+async function normalizeCategoryOrder(WaveledCategory) {
+  const list = await WaveledCategory.find({}).sort({ wl_order: 1, wl_name: 1 });
+  const ops = list.map((doc, i) => ({
+    updateOne: {
+      filter: { _id: doc._id },
+      update: { $set: { wl_order: i } },
+    },
+  }));
+  if (ops.length) await WaveledCategory.bulkWrite(ops);
+}
+
 /**
- * Rotas:
- *  GET    /api/categories                 -> lista (admin/editor/viewer)
- *  GET    /api/categories/:idOrSlug       -> obter por ID OU por slug (admin/editor/viewer)
- *  POST   /api/categories                 -> criar (admin/editor)
- *  PUT    /api/categories/:id             -> atualizar (admin/editor)
- *  DELETE /api/categories/:id             -> apagar (admin) [bloqueia se estiver em uso por produtos]
+ * Próximo valor de ordem (fim da fila).
  */
+async function nextOrder(WaveledCategory) {
+  const last = await WaveledCategory.findOne({}).sort({ wl_order: -1 });
+  return typeof last?.wl_order === "number" ? last.wl_order + 1 : 0;
+}
 
-app.get(
-  "/api/categories",
-  limiterAuth,
-  requireAuth(["admin", "editor", "viewer"]),
-  audit("categories.list"),
-  asyncH(async (req, res) => {
-    const items = await WaveledCategory.find({}).sort({ wl_name: 1 });
-    ok(res, items);
-  })
+/**
+ * Reordena a lista completa de IDs.
+ * Aceita ["id1","id2"] ou [{_id:"id1"}, ...].
+ * Se orderedIds não tiver todos os docs, os não listados vão para o fim mantendo ordem atual.
+ */
+async function reorderFull(WaveledCategory, orderedIdsRaw) {
+  const orderedIds = (orderedIdsRaw || [])
+    .map((x) => (typeof x === "string" ? x : x?._id))
+    .filter(Boolean)
+    .map(String);
+
+  // Sanidade: sem duplicados
+  const uniq = [...new Set(orderedIds)];
+  if (uniq.length !== orderedIds.length) {
+    const err = new Error("IDs duplicados na ordenação");
+    err.status = 400;
+    throw err;
+  }
+
+  // Todos que existem
+  const all = await WaveledCategory.find({}).sort({ wl_order: 1, wl_name: 1 });
+  const allIds = all.map((d) => String(d._id));
+
+  // Verifica se todos orderedIds existem (os que foram passados)
+  const notFound = uniq.filter((id) => !allIds.includes(id));
+  if (notFound.length) {
+    const err = new Error(`Alguns IDs não existem: ${notFound.join(", ")}`);
+    err.status = 400;
+    throw err;
+  }
+
+  // Constrói nova ordem: primeiro os enviados, depois os restantes
+  const remaining = allIds.filter((id) => !uniq.includes(id));
+  const finalOrder = [...uniq, ...remaining];
+
+  // Persiste SEMPRE com $set
+  const bulkOps = finalOrder.map((id, idx) => ({
+    updateOne: {
+      filter: { _id: id },
+      update: { $set: { wl_order: idx } },
+    },
+  }));
+  if (bulkOps.length) await WaveledCategory.bulkWrite(bulkOps);
+}
+
+ 
+ 
+ 
+
+// =============================== CATEGORIES (CRUD + ORDER) ===============================
+
+ 
+  app.get(
+    "/api/categories",
+    limiterAuth,
+    requireAuth(["admin", "editor", "viewer"]),
+    audit("categories.list"),
+    asyncH(async (req, res) => {
+      if (String(req.query.normalize || "0") === "1") {
+        await normalizeCategoryOrder(WaveledCategory);
+      }
+      const items = await WaveledCategory.find({}).sort({ wl_order: 1, wl_name: 1 });
+      ok(res, items);
+    })
+  );
+
+  // GET /api/categories/:idOrSlug
+  app.get(
+    "/api/categories/:idOrSlug",
+    limiterAuth,
+    requireAuth(["admin", "editor", "viewer"]),
+    audit("categories.single"),
+    asyncH(async (req, res) => {
+      const { idOrSlug } = req.params;
+      let cat;
+      if (mongoose.isValidObjectId(idOrSlug)) {
+        cat = await WaveledCategory.findById(idOrSlug);
+      } else {
+        cat = await WaveledCategory.findOne({ wl_slug: String(idOrSlug).toLowerCase() });
+      }
+      if (!cat) return errJson(res, "Categoria não encontrada", 404);
+      ok(res, cat);
+    })
+  );
+
+  // POST /api/categories
+  app.post(
+    "/api/categories",
+    limiterAuth,
+    requireAuth(["admin", "editor"]),
+    body("name").isString().isLength({ min: 2 }).trim(),
+    body("slug").optional().isString().trim(),
+    validate,
+    audit("categories.create"),
+    asyncH(async (req, res) => {
+      const name = req.body.name.trim();
+      const slug = (req.body.slug || makeSlug(name)).toLowerCase();
+
+      const exists = await WaveledCategory.findOne({
+        $or: [{ wl_name: name }, { wl_slug: slug }],
+      });
+      if (exists) return errJson(res, "Nome/slug já existente", 409);
+
+      const order = await nextOrder(WaveledCategory);
+
+      const created = await WaveledCategory.create({
+        wl_name: name,
+        wl_slug: slug,
+        wl_order: order,
+      });
+
+      ok(res, { id: created._id }, 201);
+    })
+  );
+
+  // PUT /api/categories/:id
+  app.put(
+    "/api/categories/:id",
+    limiterAuth,
+    requireAuth(["admin", "editor"]),
+    param("id").isMongoId(),
+    body("name").optional().isString().isLength({ min: 2 }).trim(),
+    body("slug").optional().isString().trim(),
+    validate,
+    audit("categories.update"),
+    asyncH(async (req, res) => {
+      const cat = await WaveledCategory.findById(req.params.id);
+      if (!cat) return errJson(res, "Categoria não encontrada", 404);
+
+      if (req.body.name) cat.wl_name = req.body.name.trim();
+
+      if (req.body.slug) {
+        cat.wl_slug = req.body.slug.trim().toLowerCase();
+      } else if (req.body.name) {
+        cat.wl_slug = makeSlug(req.body.name);
+      }
+
+      // garantir unicidade
+      const conflict = await WaveledCategory.findOne({
+        _id: { $ne: cat._id },
+        $or: [{ wl_name: cat.wl_name }, { wl_slug: cat.wl_slug }],
+      });
+      if (conflict) return errJson(res, "Nome/slug já em uso por outra categoria", 409);
+
+      await cat.save();
+      ok(res, { updated: true });
+    })
+  );
+
+  // DELETE /api/categories/:id
+  app.delete(
+    "/api/categories/:id",
+    limiterAuth,
+    requireAuth(["admin"]),
+    param("id").isMongoId(),
+    validate,
+    audit("categories.delete"),
+    asyncH(async (req, res) => {
+      const cat = await WaveledCategory.findById(req.params.id);
+      if (!cat) return errJson(res, "Categoria não encontrada", 404);
+
+      // Bloqueio se em uso (ajusta se não precisares disto)
+      const inUseCount = await WaveledProduct.countDocuments({ wl_category: cat._id });
+      if (inUseCount > 0) {
+        return errJson(
+          res,
+          `Categoria está em uso por ${inUseCount} produto(s). Remova/realoque os produtos antes de apagar.`,
+          409
+        );
+      }
+
+      await WaveledCategory.findByIdAndDelete(cat._id);
+      await normalizeCategoryOrder(WaveledCategory);
+
+      ok(res, { deleted: true });
+    })
+  );
+
+  // POST /api/categories/reorder  (ordem completa)
+  app.post(
+    "/api/categories/reorder",
+    limiterAuth,
+    requireAuth(["admin", "editor"]),
+    body("orderedIds").isArray({ min: 1 }),
+    validate,
+    audit("categories.reorder"),
+    asyncH(async (req, res) => {
+      await reorderFull(WaveledCategory, req.body.orderedIds);
+      ok(res, { reordered: true });
+    })
+  );
+
+  // PATCH /api/categories/:id/reorder-step  (↑/↓ 1 passo)
+  app.patch(
+    "/api/categories/:id/reorder-step",
+    limiterAuth,
+    requireAuth(["admin", "editor"]),
+    param("id").isMongoId(),
+    body("direction").isIn(["up", "down"]),
+    validate,
+    audit("categories.reorder-step"),
+    asyncH(async (req, res) => {
+      const { id } = req.params;
+      const { direction } = req.body;
+
+      const list = await WaveledCategory.find({}).sort({ wl_order: 1, wl_name: 1 });
+      const idx = list.findIndex((c) => String(c._id) === String(id));
+      if (idx === -1) return errJson(res, "Categoria não encontrada", 404);
+
+      const swapWith = direction === "up" ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= list.length) return ok(res, { reordered: false });
+
+      const a = list[idx];
+      const b = list[swapWith];
+
+      // swap seguro SEMPRE com $set
+      await WaveledCategory.bulkWrite([
+        { updateOne: { filter: { _id: a._id }, update: { $set: { wl_order: b.wl_order } } } },
+        { updateOne: { filter: { _id: b._id }, update: { $set: { wl_order: a.wl_order } } } },
+      ]);
+
+      ok(res, { reordered: true });
+    })
+  );
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+// ===== Mongo Schemas/Models (tudo num só ficheiro, um único mongoose)
+const ExampleShowcaseSchema = new mongoose.Schema(
+  {
+    categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', index: true },
+    productId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Product', index: true },
+    title:      { type: String, required: true },
+    description:{ type: String, default: '' },
+    image:      { type: String, required: true }, // relative path or external URL
+  },
+  { timestamps: true }
 );
+ExampleShowcaseSchema.index({ categoryId: 1, productId: 1, createdAt: -1 });
+const ExampleShowcase = mongoose.model('ExampleShowcase', ExampleShowcaseSchema);
 
-// Aceita ID Mongo OU slug
-app.get(
-  "/api/categories/:idOrSlug",
-  limiterAuth,
-  requireAuth(["admin", "editor", "viewer"]),
-  audit("categories.single"),
-  asyncH(async (req, res) => {
-    const { idOrSlug } = req.params;
-    let cat = null;
-    if (mongoose.isValidObjectId(idOrSlug)) {
-      cat = await WaveledCategory.findById(idOrSlug);
-    } else {
-      cat = await WaveledCategory.findOne({ wl_slug: String(idOrSlug).toLowerCase() });
+const CategoryVideoSchema = new mongoose.Schema(
+  {
+    categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', unique: true, index: true },
+    videoUrl:   { type: String, default: '' },
+    videoText:  { type: String, default: '' }, // rich text (html)
+  },
+  { timestamps: true }
+);
+const CategoryVideo = mongoose.model('CategoryVideo', CategoryVideoSchema);
+
+const CategoryStyleSchema = new mongoose.Schema(
+  {
+    categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', unique: true, index: true },
+    color:      { type: String, default: '#1e293b' },
+    subtitle:   { type: String, default: '' },
+  },
+  { timestamps: true }
+);
+const CategoryStyle = mongoose.model('CategoryStyle', CategoryStyleSchema);
+
+// ===== Upload (images)
+const uploadDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+ 
+
+app.post('/api/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Ficheiro ausente' });
+  return res.json({ path: `/uploads/${req.file.filename}` });
+});
+
+// ===== Examples CRUD
+app.get('/api/examples', async (req, res) => {
+  try {
+    const { categoryId, productId } = req.query;
+    const q = {};
+    if (categoryId) q.categoryId = categoryId;
+    if (productId) q.productId = productId;
+    const items = await ExampleShowcase.find(q).sort({ createdAt: -1 }).lean();
+    res.json({ data: items });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/examples', async (req, res) => {
+  try {
+    const { categoryId, productId, items } = req.body || {};
+    if (!categoryId && !productId) {
+      return res.status(400).json({ error: 'categoryId ou productId é obrigatório' });
     }
-    if (!cat) return errJson(res, "Categoria não encontrada", 404);
-    ok(res, cat);
-  })
-);
-
-app.post(
-  "/api/categories",
-  limiterAuth,
-  requireAuth(["admin", "editor"]),
-  body("name").isString().isLength({ min: 2 }).trim(),
-  body("slug").optional().isString().trim(),
-  validate,
-  audit("categories.create"),
-  asyncH(async (req, res) => {
-    const name = req.body.name.trim();
-    const slug = (req.body.slug || makeSlug(name)).toLowerCase();
-
-    const exists = await WaveledCategory.findOne({ $or: [{ wl_name: name }, { wl_slug: slug }] });
-    if (exists) return errJson(res, "Nome/slug já existente", 409);
-
-    const created = await WaveledCategory.create({
-      wl_name: name,
-      wl_slug: slug,
-    });
-
-    ok(res, { id: created._id }, 201);
-  })
-);
-
-app.put(
-  "/api/categories/:id",
-  limiterAuth,
-  requireAuth(["admin", "editor"]),
-  param("id").isMongoId(),
-  body("name").optional().isString().isLength({ min: 2 }).trim(),
-  body("slug").optional().isString().trim(),
-  validate,
-  audit("categories.update"),
-  asyncH(async (req, res) => {
-    const cat = await WaveledCategory.findById(req.params.id);
-    if (!cat) return errJson(res, "Categoria não encontrada", 404);
-
-    if (req.body.name) cat.wl_name = req.body.name.trim();
-
-    if (req.body.slug) {
-      cat.wl_slug = req.body.slug.trim().toLowerCase();
-    } else if (req.body.name) {
-      // se mudou o nome e não veio slug, recalcula
-      cat.wl_slug = makeSlug(req.body.name);
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ error: 'items vazio' });
     }
 
-    // garantir unicidade
-    const conflict = await WaveledCategory.findOne({
-      _id: { $ne: cat._id },
-      $or: [{ wl_name: cat.wl_name }, { wl_slug: cat.wl_slug }],
-    });
-    if (conflict) return errJson(res, "Nome/slug já em uso por outra categoria", 409);
+    const docs = items.map(it => ({
+      categoryId: categoryId || undefined,
+      productId:  productId  || undefined,
+      title:      it.title,
+      description:it.description || '',
+      image:      it.image,
+    }));
 
-    await cat.save();
-    ok(res, { updated: true });
-  })
-);
+    const created = await ExampleShowcase.insertMany(docs);
+    res.json({ ok: true, data: created });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
-app.delete(
-  "/api/categories/:id",
-  limiterAuth,
-  requireAuth(["admin"]),
-  param("id").isMongoId(),
-  validate,
-  audit("categories.delete"),
-  asyncH(async (req, res) => {
-    const cat = await WaveledCategory.findById(req.params.id);
-    if (!cat) return errJson(res, "Categoria não encontrada", 404);
+app.delete('/api/examples/:id', async (req, res) => {
+  try {
+    await ExampleShowcase.findByIdAndDelete(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
-    // Bloqueia remoção se em uso por produtos
-    const inUseCount = await WaveledProduct.countDocuments({ wl_category: cat._id });
-    if (inUseCount > 0) {
-      return errJson(
-        res,
-        `Categoria está em uso por ${inUseCount} produto(s). Remova/realoque os produtos antes de apagar.`,
-        409
-      );
-    }
+// ===== Category Video
+app.get('/api/categories/:id/video', async (req, res) => {
+  try {
+    const doc = await CategoryVideo.findOne({ categoryId: req.params.id }).lean();
+    res.json({ data: doc || {} });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
-    await WaveledCategory.findByIdAndDelete(cat._id);
-    ok(res, { deleted: true });
-  })
-);
+app.put('/api/categories/:id/video', async (req, res) => {
+  try {
+    const { videoUrl = '', videoText = '' } = req.body || {};
+    const doc = await CategoryVideo.findOneAndUpdate(
+      { categoryId: req.params.id },
+      { categoryId: req.params.id, videoUrl, videoText },
+      { upsert: true, new: true }
+    );
+    res.json({ ok: true, data: doc });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ===== Category Style
+app.get('/api/categories/:id/style', async (req, res) => {
+  try {
+    const doc = await CategoryStyle.findOne({ categoryId: req.params.id }).lean();
+    res.json({ data: doc || {} });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/categories/:id/style', async (req, res) => {
+  try {
+    const { color = '#1e293b', subtitle = '' } = req.body || {};
+    const doc = await CategoryStyle.findOneAndUpdate(
+      { categoryId: req.params.id },
+      { categoryId: req.params.id, color, subtitle },
+      { upsert: true, new: true }
+    );
+    res.json({ ok: true, data: doc });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1661,11 +2005,7 @@ mongoose.connection.on("disconnected", () => {
 });
 
 start();
-// --- FIM ---
-
-
-
-
+// --- FIM --- 
 
 
  
