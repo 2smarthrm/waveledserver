@@ -56,10 +56,9 @@ const COOKIE_DOMAIN =   "localhost";
 const COOKIE_SECURE = String( "false") === "true";
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "http://localhost:3002",
+  "http://localhost:3001",
   "http://localhost:3000",
   "http://waveled.vercel.app",
-  "https://waveled.vercel.app",
   "http://localhost:5174",
 ];
  
@@ -333,7 +332,7 @@ CategorySchema.pre("save", function(next) {
   next();
 });
 
-
+// const WaveledCategory = mongoose.model("WaveledCategory", CategorySchema);
 
 const ProductSchema = new Schema(
   {
@@ -1873,45 +1872,81 @@ app.delete('/api/examples/:id', async (req, res) => {
 });
 
 // ===== Category Video
-app.get('/api/categories/:id/video', async (req, res) => {
-  try {
-    const doc = await CategoryVideo.findOne({ categoryId: req.params.id }).lean();
-    res.json({ data: doc || {} });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
-app.put('/api/categories/:id/video', async (req, res) => {
-  try {
-    const { videoUrl = '', videoText = '' } = req.body || {};
-    const doc = await CategoryVideo.findOneAndUpdate(
-      { categoryId: req.params.id },
-      { categoryId: req.params.id, videoUrl, videoText },
-      { upsert: true, new: true }
-    );
-    res.json({ ok: true, data: doc });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
-// ===== Category Style
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function resolveCategoryId(idOrName) {
+  const key = String(idOrName || "").trim();
+  if (!key) return null;
+
+  // 1) ObjectId
+  if (Types.ObjectId.isValid(key)) {
+    return key;
+  }
+
+  // 2) slug (lowercase exato)
+  const slug = key.toLowerCase();
+  let cat = await WaveledCategory.findOne({ wl_slug: slug }, { _id: 1 }).lean();
+  if (cat?._id) return String(cat._id);
+
+  // 3) nome normalizado (case/acento-insensitive)
+  const norm = normalizeName(key);
+  cat = await WaveledCategory.findOne({ wl_name_norm: norm }, { _id: 1 }).lean();
+  if (cat?._id) return String(cat._id);
+
+  // 4) opcional: match exato case-insensitive em wl_name (fallback)
+  cat = await WaveledCategory.findOne(
+    { wl_name: { $regex: `^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" } },
+    { _id: 1 }
+  ).lean();
+  if (cat?._id) return String(cat._id);
+
+  return null; 
+}
+
+ 
+/* =========================
+   ROUTES: STYLE
+   Aceita :id como ObjectId, wl_slug ou wl_name
+========================= */
+
+// GET /api/categories/:id/style
 app.get('/api/categories/:id/style', async (req, res) => {
   try {
-    const doc = await CategoryStyle.findOne({ categoryId: req.params.id }).lean();
+    const cid = await resolveCategoryId(req.params.id);
+    if (!cid) {
+      // mantém resposta vazia se não encontrou
+      return res.json({ data: {} });
+    }
+    const doc = await CategoryStyle.findOne({ categoryId: cid }).lean();
     res.json({ data: doc || {} });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+// PUT /api/categories/:id/style
 app.put('/api/categories/:id/style', async (req, res) => {
   try {
+    const cid = await resolveCategoryId(req.params.id);
+    if (!cid) return res.status(404).json({ error: 'Categoria não encontrada para o identificador fornecido.' });
+
     const { color = '#1e293b', subtitle = '' } = req.body || {};
     const doc = await CategoryStyle.findOneAndUpdate(
-      { categoryId: req.params.id },
-      { categoryId: req.params.id, color, subtitle },
+      { categoryId: cid },
+      { categoryId: cid, color, subtitle },
       { upsert: true, new: true }
     );
     res.json({ ok: true, data: doc });
@@ -1920,6 +1955,275 @@ app.put('/api/categories/:id/style', async (req, res) => {
   }
 });
 
+/* =========================
+   ROUTES: VIDEO
+   Aceita :id como ObjectId, wl_slug ou wl_name
+========================= */
+
+// GET /api/categories/:id/video
+app.get('/api/categories/:id/video', async (req, res) => {
+  try {
+    const cid = await resolveCategoryId(req.params.id);
+    if (!cid) {
+      return res.json({ data: {} });
+    }
+    const doc = await CategoryVideo.findOne({ categoryId: cid }).lean();
+    res.json({ data: doc || {} });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/categories/:id/video
+app.put('/api/categories/:id/video', async (req, res) => {
+  try {
+    const cid = await resolveCategoryId(req.params.id);
+    if (!cid) return res.status(404).json({ error: 'Categoria não encontrada para o identificador fornecido.' });
+
+    const { videoUrl = '', videoText = '' } = req.body || {};
+    const doc = await CategoryVideo.findOneAndUpdate(
+      { categoryId: cid },
+      { categoryId: cid, videoUrl, videoText },
+      { upsert: true, new: true }
+    );
+    res.json({ ok: true, data: doc });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ 
+ 
+
+//================================ "SOLUÇÕES" ==================================
+
+
+
+
+
+
+// backend/solutions.module.js
+// Full Express + Mongoose backend for "Solutions" with:
+// - CRUD de soluções (/api/solutions)
+// - Produtos relacionados à solução
+// - Kits (combinações de produtos) por solução
+// - Exemplos (imagem+texto) por solução
+//
+// Compatível com o teu frontend (endpoints e payloads). Coloca este ficheiro no teu servidor
+// Node/Express, garante que a conexão ao Mongo já está estabelecida noutro ponto da app
+// (ex.: mongoose.connect(...)) e chama `registerSolutionsModule(app)` no bootstrap.
+
+ 
+// ===================== Utils =====================
+ 
+
+const ensureValid = (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: errors.array().map((e) => e.msg).join('; ') });
+  }
+};
+
+// ===================== Schemas/Models =====================
+// Product: assumimos que já existe no teu projeto.
+// Aqui usamos apenas o _id e alguns campos comuns no populate.
+// const Product = mongoose.model('Product');
+
+const SolutionSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, index: 'text' },
+    description: { type: String, default: '' },
+    image: { type: String, default: '' },
+  },
+  { timestamps: true }
+);
+const Solution = mongoose.model('Solution', SolutionSchema);
+
+const SolutionRelatedProductSchema = new mongoose.Schema(
+  {
+    solutionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Solution', required: true, index: true },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
+  },
+  { timestamps: true }
+);
+SolutionRelatedProductSchema.index({ solutionId: 1, productId: 1 }, { unique: true });
+const SolutionRelatedProduct = mongoose.model('SolutionRelatedProduct', SolutionRelatedProductSchema);
+
+const SolutionKitSchema = new mongoose.Schema(
+  {
+    solutionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Solution', required: true, index: true },
+    name: { type: String, required: true },
+    productIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+  },
+  { timestamps: true }
+);
+const SolutionKit = mongoose.model('SolutionKit', SolutionKitSchema);
+
+const SolutionExampleSchema = new mongoose.Schema(
+  {
+    solutionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Solution', required: true, index: true },
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    image: { type: String, required: true },
+  },
+  { timestamps: true }
+);
+const SolutionExample = mongoose.model('SolutionExample', SolutionExampleSchema);
+
+// ===================== Router/Module =====================
+
+
+const { Types } = mongoose;
+async function getProductsBasic(ids = []) {
+  const col = mongoose.connection.collection('products');
+  const objectIds = ids
+    .filter(Boolean)
+    .map((x) => (Types.ObjectId.isValid(x) ? new Types.ObjectId(String(x)) : null))
+    .filter(Boolean);
+
+  if (!objectIds.length) return [];
+  const docs = await col
+    .find({ _id: { $in: objectIds } }, { projection: { wl_name: 1, wl_images: 1 } })
+    .toArray();
+
+  return docs.map((d) => ({
+    _id: d._id,
+    wl_name: d.wl_name || '',
+    wl_images: Array.isArray(d.wl_images) ? d.wl_images : [],
+  }));
+}
+
+
+
+
+
+ 
+ 
+
+  // --------- /api/solutions (list) ---------
+  app.get(
+    '/api/solutions/',
+    [query('q').optional().isString().withMessage('q inválido')],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { q } = req.query;
+      let filter = {};
+      if (q && q.trim()) {
+        // Pesquisa simples por título/descrição
+        filter = { $or: [
+          { title: { $regex: q.trim(), $options: 'i' } },
+          { description: { $regex: q.trim(), $options: 'i' } },
+        ]};
+      }
+      const items = await Solution.find(filter).sort({ createdAt: -1 }).lean();
+      return res.json({ data: items });
+    })
+  );
+
+  // --------- /api/solutions (create) ---------
+  app.post(
+    '/api/solutions/',
+    [
+      body('title').isString().trim().notEmpty().withMessage('title é obrigatório'),
+      body('description').optional().isString(),
+      body('image').optional().isString(),
+    ],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { title, description = '', image = '' } = req.body || {};
+      const created = await Solution.create({ title, description, image });
+      return res.json({ ok: true, data: created });
+    })
+  );
+
+  // --------- /api/solutions/:id (update) ---------
+  app.put(
+    '/api/solutions/:id',
+    [
+      param('id').isMongoId().withMessage('id inválido'),
+      body('title').optional().isString(),
+      body('description').optional().isString(),
+      body('image').optional().isString(),
+    ],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { id } = req.params;
+      const { title, description, image } = req.body || {};
+      const updated = await Solution.findByIdAndUpdate(
+        id,
+        { $set: { ...(title !== undefined && { title }), ...(description !== undefined && { description }), ...(image !== undefined && { image }) } },
+        { new: true }
+      );
+      if (!updated) return res.status(404).json({ error: 'Solução não encontrada' });
+      return res.json({ ok: true, data: updated });
+    })
+  );
+
+  // --------- /api/solutions/:id (delete) ---------
+  app.delete(
+    '/api/solutions/:id',
+    [param('id').isMongoId().withMessage('id inválido')],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { id } = req.params;
+      const removed = await Solution.findByIdAndDelete(id);
+      if (!removed) return res.status(404).json({ error: 'Solução não encontrada' });
+      // cascade: apaga vínculos/filhos
+      await Promise.all([
+        SolutionRelatedProduct.deleteMany({ solutionId: id }),
+        SolutionKit.deleteMany({ solutionId: id }),
+        SolutionExample.deleteMany({ solutionId: id }),
+      ]);
+      return res.json({ ok: true });
+    })
+  );
+
+  // =============== Produtos relacionados ===============
+
+ 
+ app.get(
+  '/api/solutions/:id/products',
+  [param('id').isMongoId().withMessage('id inválido')],
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res); if (err) return err;
+    const { id } = req.params;
+
+    const rels = await SolutionRelatedProduct.find({ solutionId: id }).lean();
+    const productIds = rels.map((r) => r.productId);
+    if (!productIds.length) return res.json({ data: [] });
+
+    const products = await getProductsBasic(productIds);
+    return res.json({ data: products });
+  })
+);
+ 
+ 
+app.post(
+  '/api/solutions/:id/products',
+  [
+    param('id').isMongoId().withMessage('id inválido'),
+    body('productId').isMongoId().withMessage('productId inválido'),
+  ],
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res); if (err) return err;
+    const { id } = req.params;
+    const { productId } = req.body || {};
+
+    const exists = await Solution.exists({ _id: id });
+    if (!exists) return res.status(404).json({ error: 'Solução não encontrada' });
+
+    await SolutionRelatedProduct.updateOne(
+      { solutionId: id, productId },
+      { $setOnInsert: { solutionId: id, productId } },
+      { upsert: true }
+    );
+ 
+    const prods = await getProductsBasic([productId]);
+    const product = prods?.[0] || { _id: productId, wl_name: '(produto)', wl_images: [] };
+
+    return res.json({ ok: true, data: product });
+  })
+);
 
 
 
@@ -1929,15 +2233,178 @@ app.put('/api/categories/:id/style', async (req, res) => {
 
 
 
+  app.delete(
+    '/api/solutions/:id/products/:productId',
+    [
+      param('id').isMongoId().withMessage('id inválido'),
+      param('productId').isMongoId().withMessage('productId inválido'),
+    ],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { id, productId } = req.params;
+      await SolutionRelatedProduct.deleteOne({ solutionId: id, productId });
+      return res.json({ ok: true });
+    })
+  );
+
+  // =============== Kits ===============
+
+
+ 
+
+app.get(
+  '/api/solutions/:id/kits',
+  [param('id').isMongoId().withMessage('id inválido')],
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res); if (err) return err;
+    const { id } = req.params;
+
+    const kits = await SolutionKit.find({ solutionId: id })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!kits.length) return res.json({ data: [] });
+
+    const allIds = [...new Set(kits.flatMap(k => (k.productIds || []).map(String)))];
+    const prodDocs = await getProductsBasic(allIds);
+    const byId = new Map(prodDocs.map(p => [String(p._id), p]));
+
+    const enriched = kits.map(k => ({
+      ...k,
+      products: (k.productIds || []).map(pid => byId.get(String(pid)) || { _id: pid, wl_name: '(produto removido)', wl_images: [] }),
+    }));
+
+    return res.json({ data: enriched });
+  })
+);
+
+
+app.post(
+  '/api/solutions/:id/kits',
+  [
+    param('id').isMongoId().withMessage('id inválido'),
+    body('name').isString().trim().notEmpty().withMessage('name é obrigatório'),
+    body('productIds').isArray({ min: 1 }).withMessage('productIds deve ser array com pelo menos 1 item'),
+    body('productIds.*').isMongoId().withMessage('productIds contém id inválido'),
+  ],
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res); if (err) return err;
+    const { id } = req.params;
+    const { name, productIds } = req.body || {};
+
+    const exists = await Solution.exists({ _id: id });
+    if (!exists) return res.status(404).json({ error: 'Solução não encontrada' });
+
+    const created = await SolutionKit.create({ solutionId: id, name, productIds });
+
+    const prodDocs = await getProductsBasic(productIds);
+    const byId = new Map(prodDocs.map(p => [String(p._id), p]));
+    const enriched = {
+      ...created.toObject(),
+      products: productIds.map(pid => byId.get(String(pid)) || { _id: pid, wl_name: '(produto removido)', wl_images: [] }),
+    };
+
+    return res.json({ ok: true, data: enriched });
+  })
+);
 
 
 
+
+ 
+  app.delete(
+    '/api/solutions/:id/kits/:kitId',
+    [param('id').isMongoId().withMessage('id inválido'), param('kitId').isMongoId().withMessage('kitId inválido')],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { id, kitId } = req.params;
+      await SolutionKit.deleteOne({ _id: kitId, solutionId: id });
+      return res.json({ ok: true });
+    })
+  );
+
+  // =============== Exemplos ===============
+  app.get(
+    '/api/solutions/:id/examples',
+    [param('id').isMongoId().withMessage('id inválido')],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { id } = req.params;
+      const items = await SolutionExample.find({ solutionId: id }).sort({ createdAt: -1 }).lean();
+      return res.json({ data: items });
+    })
+  );
+
+  app.put(
+  '/api/solutions/:id/examples/:exampleId',
+  [
+    param('id').isMongoId().withMessage('id inválido'),
+    param('exampleId').isMongoId().withMessage('exampleId inválido'),
+    body('title').optional().isString().trim().notEmpty().withMessage('title inválido'),
+    body('description').optional().isString(),
+    body('image').optional().isString().trim().notEmpty().withMessage('image inválida'),
+  ],
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res); if (err) return err;
+    const { id, exampleId } = req.params;
+    const { title, description, image } = req.body || {};
+
+    // Verifica se a solução existe
+    const solutionExists = await Solution.exists({ _id: id });
+    if (!solutionExists) return res.status(404).json({ error: 'Solução não encontrada' });
+
+    // Verifica se o exemplo pertence à solução
+    const example = await SolutionExample.findOne({ _id: exampleId, solutionId: id });
+    if (!example) return res.status(404).json({ error: 'Exemplo não encontrado' });
+
+    // Atualiza apenas os campos enviados
+    if (typeof title === 'string') example.title = title;
+    if (typeof description === 'string') example.description = description;
+    if (typeof image === 'string') example.image = image;
+
+    await example.save();
+    return res.json({ ok: true, data: example });
+  })
+);
+
+
+  app.post(
+    '/api/solutions/:id/examples',
+    [
+      param('id').isMongoId().withMessage('id inválido'),
+      body('title').isString().trim().notEmpty().withMessage('title é obrigatório'),
+      body('description').optional().isString(),
+      body('image').isString().trim().notEmpty().withMessage('image é obrigatória'),
+    ],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { id } = req.params;
+      const { title, description = '', image } = req.body || {};
+      const exists = await Solution.exists({ _id: id });
+      if (!exists) return res.status(404).json({ error: 'Solução não encontrada' });
+      const created = await SolutionExample.create({ solutionId: id, title, description, image });
+      return res.json({ ok: true, data: created });
+    })
+  );
+
+  app.delete(
+    '/api/solutions/:id/examples/:exampleId',
+    [param('id').isMongoId().withMessage('id inválido'), param('exampleId').isMongoId().withMessage('exampleId inválido')],
+    asyncH(async (req, res) => {
+      const err = ensureValid(req, res); if (err) return err;
+      const { id, exampleId } = req.params;
+      await SolutionExample.deleteOne({ _id: exampleId, solutionId: id });
+      return res.json({ ok: true });
+    })
+  );
+
+ 
 
 
 
 // ============================== “MAIS AMADOS” ================================
 app.get(
-  "/api/products/top-liked",
+  "/api/products/top-liked", 
   limiterAuth,
   requireAuth(["admin", "editor", "viewer"]),
   audit("products.topLiked"),
@@ -2007,8 +2474,3 @@ mongoose.connection.on("disconnected", () => {
 
 start();
 // --- FIM --- 
-
-
- 
- 
-   
