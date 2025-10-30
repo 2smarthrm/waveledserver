@@ -1,20 +1,6 @@
  
 /*
-
-ri/537.36"
-::1 - - [24/Oct/2025:11:41:55 +0000] "GET /api/products HTTP/1.1" 200 - "http://localhost:3002/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-Route error: MongoServerError: E11000 duplicate key error collection: test.waveled_categories index: wl_name_1 dup key: { wl_name: "Painéis OLED Transparentes  | Quiosques digitais" }
-    at InsertOneOperation.execute (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/insert.js:51:19)
-    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at async tryOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:207:20)
-    at async executeOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:75:16)
-    at async Collection.insertOne (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/collection.js:157:16)
-Middleware erro: MongoServerError: E11000 duplicate key error collection: test.waveled_categories index: wl_name_1 dup key: { wl_name: "Painéis OLED Transparentes  | Quiosques digitais" }
-    at InsertOneOperation.execute (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/insert.js:51:19)
-    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at async tryOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:207:20)
-    at async executeOperation (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:75:16)
-    at async Collection.insertOne (/Users/exportechportugal/Downloads/Main-File/Dashboardapp/server/node_modules/mongoose/node_modules/mongodb/lib/collection.js:157:16)
+ 
 
 */
 
@@ -59,6 +45,7 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3001",
   "http://localhost:3000",
   "https://waveled.vercel.app",
+  "https://waveled-pspo.vercel.app",
   "http://localhost:5174",
 ];
  
