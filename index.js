@@ -566,6 +566,13 @@ app.get(
   })
 );
 
+
+app.get("/api/me", (req, res) => {
+  if (!req.session.user) return res.status(200).json({ ok: true, data: { authenticated: false } });
+  return res.status(200).json({ ok: true, data: { authenticated: true, user: req.session.user } });
+});
+
+
 // ========================== FORM PÚBLICO / MENSAGENS =========================
 // POST /api/public/contact
 app.post(
