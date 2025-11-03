@@ -115,14 +115,22 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 
  
  
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    return cb(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Permite requests de ferramentas internas (ex: Postman, curl)
+      if (!origin) return callback(null, true);
+
+      if (ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn(`🚫 CORS bloqueado para origem: ${origin}`);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 
  
 
@@ -483,45 +491,31 @@ const ensureCategory = async (nameOrId) => {
 
 
 // ============================== AUTH (SESSÕES) ===============================
-app.post("/api/auth/login", limiterLogin, body("email").isEmail(), body("password").isString().isLength({ min: 6 }), validate, audit("auth.login"),
+app.post(
+  "/api/auth/login",
+  limiterLogin,
+  body("email").isEmail(),
+  body("password").isString().isLength({ min: 6 }),
+  validate,
+  audit("auth.login"),
   asyncH(async (req, res) => {
     const { email, password } = req.body;
-    const user = await WaveledUser.findOne({ wl_email: email, wl_active: true });
+    const user = await WaveledUser.findOne({
+      wl_email: email,
+      wl_active: true,
+    });
     if (!user) return errJson(res, "Credenciais inválidas", 401);
     const okPass = await bcrypt.compare(password, user.wl_password_hash);
     if (!okPass) return errJson(res, "Credenciais inválidas", 401);
-
-    // Regenera o ID de sessão antes de associar o utilizador
-   req.session.regenerate((err) => {
-     if (err) {
-        console.error("session.regenerate error:", err);
-        return errJson(res, "Erro de sessão", 500);
-     }
-      req.session.user = {
-        id: String(user._id),
+    req.session.user = {
+      id: String(user._id),
       email: user.wl_email,
-        role: user.wl_role,
-        name: user.wl_name,
-      };
-      // Garante que está gravada antes de responder
-      req.session.save((err2) => {
-        if (err2) {
-          console.error("session.save error:", err2);
-         return errJson(res, "Erro de sessão", 500);
-        }
-       ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
-     });
-    });
-    req.session.user = {   
-        id: String(user._id),
-        email: user.wl_email,
-        role: user.wl_role,
-        name: user.wl_name
-      };
-   ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
+      role: user.wl_role,
+      name: user.wl_name,
+    };
+    ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
   })
 );
-
 
 app.post(
   "/api/auth/logout",
