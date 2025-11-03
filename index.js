@@ -2,7 +2,7 @@
 /*
  
 
-em produção a sessão faz apenas uns 5s ou menos , fiz o deploy em vercel:
+session do not persist on producion when dpelouy my app on vercel , i want it to be persisted :
 
 */
 
@@ -38,7 +38,7 @@ mongoose.set("bufferCommands", false);
 // --------------------------------- ENV ---------------------------------------
 const PORT =   4000;
 const MONGO_URI =  "mongodb+srv://2smarthrm_db_user:afMz4WEnx9is1N3O@cluster0.7p7g2qd.mongodb.net/";
-const SESSION_SECRET = crypto.randomBytes(48).toString("hex");
+const SESSION_SECRET =  "478974ifhklfhnlf.jolçi49oipru98jioy89io57yth8ioeydhnmuilkgyh874iil5uej89poiu5rgejfdiklghnfmiujklyghnuijkghvnuiolvuyj";
 const COOKIE_NAME =  "wl_sid";
 const COOKIE_DOMAIN =   "localhost";
 const COOKIE_SECURE = String( "false") === "true";
@@ -171,30 +171,25 @@ const PRODUCTION = process.env.NODE_ENV === "production";
  
 
 app.use(session({
-  name: COOKIE_NAME,
+  name: COOKIE_NAME,                // "wl_sid"
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: MONGO_URI,
     collectionName: "waveled_sessions",
-  ttl: 60 * 60 * 8,
-   ttl: 60 * 60 * 8, // 8h
-   ttl: 60 * 60 * 8,           // 8h
-    touchAfter: 60 * 10,
+    ttl: 60 * 60 * 8,              // 8h in store
+    touchAfter: 60 * 10,           // reduce writes
   }),
   cookie: {
     httpOnly: true,
-   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-   secure: process.env.NODE_ENV === "production",
-   maxAge: 1000 * 60 * 60 * 24,
-   maxAge: 1000 * 60 * 60 * 8, // 8h, alinhado com ttl
-  sameSite: PRODUCTION ? "none" : "lax",
-   secure: PRODUCTION,
-  maxAge: 1000 * 60 * 60 * 8, // 8h
-    // NADA de domain: "localhost" em produção
+    sameSite: PRODUCTION ? "none" : "lax", // cross-site needs 'none'
+    secure: PRODUCTION,                    // required when SameSite=None
+    // DO NOT set domain in prod; let it default to the API host
+    maxAge: 1000 * 60 * 60 * 8,            
+    path: "/",                             
   },
-  rolling: true,
+  rolling: true,                             // refresh expiry on each response
 }));
 
 
@@ -491,8 +486,7 @@ const ensureCategory = async (nameOrId) => {
 
 
 // ============================== AUTH (SESSÕES) ===============================
-app.post(
-  "/api/auth/login",
+app.post("/api/auth/login",
   limiterLogin,
   body("email").isEmail(),
   body("password").isString().isLength({ min: 6 }),
@@ -500,22 +494,34 @@ app.post(
   audit("auth.login"),
   asyncH(async (req, res) => {
     const { email, password } = req.body;
-    const user = await WaveledUser.findOne({
-      wl_email: email,
-      wl_active: true,
-    });
+    const user = await WaveledUser.findOne({ wl_email: email, wl_active: true });
     if (!user) return errJson(res, "Credenciais inválidas", 401);
+
     const okPass = await bcrypt.compare(password, user.wl_password_hash);
     if (!okPass) return errJson(res, "Credenciais inválidas", 401);
-    req.session.user = {
-      id: String(user._id),
-      email: user.wl_email,
-      role: user.wl_role,
-      name: user.wl_name,
-    };
-    ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
+
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error("session.regenerate error:", err);
+        return errJson(res, "Erro de sessão", 500);
+      }
+      req.session.user = {
+        id: String(user._id),
+        email: user.wl_email,
+        role: user.wl_role,
+        name: user.wl_name,
+      };
+      req.session.save((err2) => {
+        if (err2) {
+          console.error("session.save error:", err2);
+          return errJson(res, "Erro de sessão", 500);
+        }
+        ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
+      });
+    });
   })
 );
+
 
 app.post(
   "/api/auth/logout",
