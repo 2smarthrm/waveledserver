@@ -1,4 +1,10 @@
  
+/*
+ 
+
+em produção a sessão faz apenas uns 5s ou menos , fiz o deploy em vercel:
+
+*/
 
 import path from "path";
 import fs from "fs";
@@ -109,22 +115,14 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 
  
  
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Permite requests de ferramentas internas (ex: Postman, curl)
-      if (!origin) return callback(null, true);
-
-      if (ALLOWED_ORIGINS.includes(origin)) {
-        return callback(null, true);
-      }
-
-      console.warn(`🚫 CORS bloqueado para origem: ${origin}`);
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    return cb(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
 
  
 
@@ -162,22 +160,35 @@ app.use((req, _res, next) => {
 
 
 const PRODUCTION = process.env.NODE_ENV === "production";
+ 
 
 app.use(session({
   name: COOKIE_NAME,
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  store: MongoStore.create({ mongoUrl: MONGO_URI, collectionName: "waveled_sessions" }),
+  store: MongoStore.create({
+    mongoUrl: MONGO_URI,
+    collectionName: "waveled_sessions",
+  ttl: 60 * 60 * 8,
+   ttl: 60 * 60 * 8, // 8h
+   ttl: 60 * 60 * 8,           // 8h
+    touchAfter: 60 * 10,
+  }),
   cookie: {
     httpOnly: true,
-    sameSite: PRODUCTION ? "none" : "lax", // << essencial p/ cross-site
-    secure: PRODUCTION,                    // << tem de ser true em HTTPS
-    // NÃO definir "domain" para "localhost" em produção!
-    // domain: undefined
-    maxAge: 1000 * 60 * 60 * 24,
+   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+   secure: process.env.NODE_ENV === "production",
+   maxAge: 1000 * 60 * 60 * 24,
+   maxAge: 1000 * 60 * 60 * 8, // 8h, alinhado com ttl
+  sameSite: PRODUCTION ? "none" : "lax",
+   secure: PRODUCTION,
+  maxAge: 1000 * 60 * 60 * 8, // 8h
+    // NADA de domain: "localhost" em produção
   },
+  rolling: true,
 }));
+
 
 // -------------------------------- Utils --------------------------------------
 const ok = (res, data, code = 200) => res.status(code).json({ ok: true, data });
@@ -472,31 +483,45 @@ const ensureCategory = async (nameOrId) => {
 
 
 // ============================== AUTH (SESSÕES) ===============================
-app.post(
-  "/api/auth/login",
-  limiterLogin,
-  body("email").isEmail(),
-  body("password").isString().isLength({ min: 6 }),
-  validate,
-  audit("auth.login"),
+app.post("/api/auth/login", limiterLogin, body("email").isEmail(), body("password").isString().isLength({ min: 6 }), validate, audit("auth.login"),
   asyncH(async (req, res) => {
     const { email, password } = req.body;
-    const user = await WaveledUser.findOne({
-      wl_email: email,
-      wl_active: true,
-    });
+    const user = await WaveledUser.findOne({ wl_email: email, wl_active: true });
     if (!user) return errJson(res, "Credenciais inválidas", 401);
     const okPass = await bcrypt.compare(password, user.wl_password_hash);
     if (!okPass) return errJson(res, "Credenciais inválidas", 401);
-    req.session.user = {
-      id: String(user._id),
+
+    // Regenera o ID de sessão antes de associar o utilizador
+   req.session.regenerate((err) => {
+     if (err) {
+        console.error("session.regenerate error:", err);
+        return errJson(res, "Erro de sessão", 500);
+     }
+      req.session.user = {
+        id: String(user._id),
       email: user.wl_email,
-      role: user.wl_role,
-      name: user.wl_name,
-    };
-    ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
+        role: user.wl_role,
+        name: user.wl_name,
+      };
+      // Garante que está gravada antes de responder
+      req.session.save((err2) => {
+        if (err2) {
+          console.error("session.save error:", err2);
+         return errJson(res, "Erro de sessão", 500);
+        }
+       ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
+     });
+    });
+    req.session.user = {   
+        id: String(user._id),
+        email: user.wl_email,
+        role: user.wl_role,
+        name: user.wl_name
+      };
+   ok(res, { authenticated: true, role: user.wl_role, name: user.wl_name });
   })
 );
+
 
 app.post(
   "/api/auth/logout",
@@ -1618,6 +1643,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     limiterAuth,
     requireAuth(["admin", "editor", "viewer"]),
     audit("categories.single"),
+    
     asyncH(async (req, res) => {
       const { idOrSlug } = req.params;
       let cat;
@@ -1640,6 +1666,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     body("slug").optional().isString().trim(),
     validate,
     audit("categories.create"),
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const name = req.body.name.trim();
       const slug = (req.body.slug || makeSlug(name)).toLowerCase();
@@ -1671,6 +1698,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     body("slug").optional().isString().trim(),
     validate,
     audit("categories.update"),
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const cat = await WaveledCategory.findById(req.params.id);
       if (!cat) return errJson(res, "Categoria não encontrada", 404);
@@ -1703,6 +1731,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     param("id").isMongoId(),
     validate,
     audit("categories.delete"),
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const cat = await WaveledCategory.findById(req.params.id);
       if (!cat) return errJson(res, "Categoria não encontrada", 404);
@@ -1732,6 +1761,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     body("orderedIds").isArray({ min: 1 }),
     validate,
     audit("categories.reorder"),
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       await reorderFull(WaveledCategory, req.body.orderedIds);
       ok(res, { reordered: true });
@@ -1747,6 +1777,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     body("direction").isIn(["up", "down"]),
     validate,
     audit("categories.reorder-step"),
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const { id } = req.params;
       const { direction } = req.body;
@@ -1836,7 +1867,7 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
  
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', requireAuth(["admin", "editor"]),upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Ficheiro ausente' });
   return res.json({ path: `/uploads/${req.file.filename}` });
 });
@@ -1855,7 +1886,9 @@ app.get('/api/examples', async (req, res) => {
   }
 });
 
-app.post('/api/examples', async (req, res) => {
+app.post('/api/examples', 
+   requireAuth(["admin", "editor", "viewer"]),
+  async (req, res) => {
   try {
     const { categoryId, productId, items } = req.body || {};
     if (!categoryId && !productId) {
@@ -1880,7 +1913,7 @@ app.post('/api/examples', async (req, res) => {
   }
 });
 
-app.delete('/api/examples/:id', async (req, res) => {
+app.delete('/api/examples/:id',   requireAuth(["admin", "editor"]), async (req, res) => {
   try {
     await ExampleShowcase.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
@@ -1897,7 +1930,7 @@ function isObjectId(id) {
 }
 
  
-app.patch('/api/examples/:id', async (req, res) => {
+app.patch('/api/examples/:id',   requireAuth(["admin", "editor"]), async (req, res) => {
   try {
     const { id } = req.params;
     if (!isObjectId(id)) {
@@ -2018,7 +2051,7 @@ app.get('/api/categories/:id/style', async (req, res) => {
 });
 
 // PUT /api/categories/:id/style
-app.put('/api/categories/:id/style', async (req, res) => {
+app.put('/api/categories/:id/style',   requireAuth(["admin", "editor", "viewer"]), async (req, res) => {
   try {
     const cid = await resolveCategoryId(req.params.id);
     if (!cid) return res.status(404).json({ error: 'Categoria não encontrada para o identificador fornecido.' });
@@ -2041,7 +2074,7 @@ app.put('/api/categories/:id/style', async (req, res) => {
 ========================= */
 
 // GET /api/categories/:id/video
-app.get('/api/categories/:id/video', async (req, res) => {
+app.get('/api/categories/:id/video',   requireAuth(["admin", "editor", "viewer"]), async (req, res) => {
   try {
     const cid = await resolveCategoryId(req.params.id);
     if (!cid) {
@@ -2055,7 +2088,7 @@ app.get('/api/categories/:id/video', async (req, res) => {
 });
 
 // PUT /api/categories/:id/video
-app.put('/api/categories/:id/video', async (req, res) => {
+app.put('/api/categories/:id/video', requireAuth(["admin", "editor", "viewer"]),  async (req, res) => {
   try {
     const cid = await resolveCategoryId(req.params.id);
     if (!cid) return res.status(404).json({ error: 'Categoria não encontrada para o identificador fornecido.' });
@@ -2208,6 +2241,7 @@ async function getProductsBasic(ids = []) {
       body('description').optional().isString(),
       body('image').optional().isString(),
     ],
+      requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { title, description = '', image = '' } = req.body || {};
@@ -2225,6 +2259,7 @@ async function getProductsBasic(ids = []) {
       body('description').optional().isString(),
       body('image').optional().isString(),
     ],
+      requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { id } = req.params;
@@ -2243,6 +2278,7 @@ async function getProductsBasic(ids = []) {
   app.delete(
     '/api/solutions/:id',
     [param('id').isMongoId().withMessage('id inválido')],
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { id } = req.params;
@@ -2284,6 +2320,7 @@ app.post(
     param('id').isMongoId().withMessage('id inválido'),
     body('productId').isMongoId().withMessage('productId inválido'),
   ],
+  requireAuth(["admin", "editor"]),
   asyncH(async (req, res) => {
     const err = ensureValid(req, res); if (err) return err;
     const { id } = req.params;
@@ -2319,6 +2356,7 @@ app.post(
       param('id').isMongoId().withMessage('id inválido'),
       param('productId').isMongoId().withMessage('productId inválido'),
     ],
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { id, productId } = req.params;
@@ -2367,6 +2405,7 @@ app.post(
     body('productIds').isArray({ min: 1 }).withMessage('productIds deve ser array com pelo menos 1 item'),
     body('productIds.*').isMongoId().withMessage('productIds contém id inválido'),
   ],
+  requireAuth(["admin", "editor"]),
   asyncH(async (req, res) => {
     const err = ensureValid(req, res); if (err) return err;
     const { id } = req.params;
@@ -2395,6 +2434,7 @@ app.post(
   app.delete(
     '/api/solutions/:id/kits/:kitId',
     [param('id').isMongoId().withMessage('id inválido'), param('kitId').isMongoId().withMessage('kitId inválido')],
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { id, kitId } = req.params;
@@ -2406,7 +2446,7 @@ app.post(
   // =============== Exemplos ===============
   app.get(
     '/api/solutions/:id/examples',
-    [param('id').isMongoId().withMessage('id inválido')],
+    [param('id').isMongoId().withMessage('id inválido')], 
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { id } = req.params;
@@ -2424,6 +2464,7 @@ app.post(
     body('description').optional().isString(),
     body('image').optional().isString().trim().notEmpty().withMessage('image inválida'),
   ],
+  requireAuth(["admin", "editor"]),
   asyncH(async (req, res) => {
     const err = ensureValid(req, res); if (err) return err;
     const { id, exampleId } = req.params;
@@ -2456,6 +2497,7 @@ app.post(
       body('description').optional().isString(),
       body('image').isString().trim().notEmpty().withMessage('image é obrigatória'),
     ],
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { id } = req.params;
@@ -2470,6 +2512,7 @@ app.post(
   app.delete(
     '/api/solutions/:id/examples/:exampleId',
     [param('id').isMongoId().withMessage('id inválido'), param('exampleId').isMongoId().withMessage('exampleId inválido')],
+    requireAuth(["admin", "editor"]),
     asyncH(async (req, res) => {
       const err = ensureValid(req, res); if (err) return err;
       const { id, exampleId } = req.params;
