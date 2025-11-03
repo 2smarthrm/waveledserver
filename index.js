@@ -179,9 +179,8 @@ app.use(
     }),
     cookie: {
       httpOnly: true,
-      sameSite: "none",
-      secure: COOKIE_SECURE,
-      domain: COOKIE_DOMAIN === "localhost" ? undefined : COOKIE_DOMAIN,
+      sameSite: "lax",
+      secure: COOKIE_SECURE, 
       maxAge: 1000 * 60 * 60 * 24,
     },
   })
