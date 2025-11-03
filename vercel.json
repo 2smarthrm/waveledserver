@@ -12,8 +12,7 @@
       "src": "/(.*)",
       "dest": "index.js"
     }
-  ],
- // vercel.json (no projeto do admin)
+  ], 
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://waveledserver.vercel.app/api/$1" }
