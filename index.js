@@ -1,30 +1,4 @@
  
-/*
- 
-
-em localhost funciona bem mas hospedado vem est eerro:
-
-je {message: 'Request failed with status code 404', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
-code: "ERR_BAD_REQUEST"config: {transitional: {…}, adapter: Array(3), transformRequest: Array(1), transformResponse: Array(1), timeout: 0, …}
-message: "Request failed with status code 404"name: "AxiosError"request: XMLHttpRequest {onreadystatechange: null, readyState: 4, timeout: 0, withCredentials: true, upload: XMLHttpRequestUpload, …}
-response: config: {transitional: {…}, adapter: Array(3), transformRequest: Array(1), transformResponse: Array(1), timeout: 0, …}data: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot GET /api/me</pre>\n</body>\n</html>\n"headers: ln {cache-control: 'public, max-age=0, must-revalidate', content-length: '145', content-type: 'text/html; charset=utf-8'}request: XMLHttpRequest {onreadystatechange: null, readyState: 4, timeout: 0, withCredentials: true, upload: XMLHttpRequestUpload, …}status: 404statusText: ""[[Prototype]]: Objectstatus: 404stack: "AxiosError: Request failed with status code 404\n    at yE (https://waveledadmin.vercel.app/assets/index-BP1l4Sqx.js:70:1083)\n    at XMLHttpRequest.v (https://waveledadmin.vercel.app/assets/index-BP1l4Sqx.js:70:5704)\n    at Yo.request (https://waveledadmin.vercel.app/assets/index-BP1l4Sqx.js:72:2071)\n    at async e (https://waveledadmin.vercel.app/assets/index-BP1l4Sqx.js:310:4209)"[[Prototype]]: Error
-e @ index-BP1l4Sqx.js:310
-await in e
-u @ index-BP1l4Sqx.js:310
-await in u
-Xb @ index-BP1l4Sqx.js:37
-Qb @ index-BP1l4Sqx.js:37
-Jb @ index-BP1l4Sqx.js:37
-Sv @ index-BP1l4Sqx.js:37
-kx @ index-BP1l4Sqx.js:37
-(anonymous) @ index-BP1l4Sqx.js:37
-Cm @ index-BP1l4Sqx.js:40
-nx @ index-BP1l4Sqx.js:37
-sf @ index-BP1l4Sqx.js:37
-Jh @ index-BP1l4Sqx.js:37
-hR @ index-BP1l4Sqx.js:37Understand this error
-
-*/
 
 import path from "path";
 import fs from "fs";
@@ -69,6 +43,7 @@ const ALLOWED_ORIGINS = [
   "https://waveled.vercel.app",
   "https://waveled-pspo.vercel.app",
   "http://localhost:5174",
+  "https://waveledadmin.vercel.app"
 ];
  
  
