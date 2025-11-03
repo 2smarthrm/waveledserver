@@ -12,8 +12,5 @@
       "src": "/(.*)",
       "dest": "index.js"
     }
-  ],  
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://waveledserver.vercel.app/api/$1" }
-  ] 
+  ]
 }
