@@ -1,5 +1,4 @@
-  
-
+ 
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -19,14 +18,31 @@ import morgan from "morgan";
 import { nanoid } from "nanoid";
 import session from "express-session";
 import MongoStore from "connect-mongo";
- const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; // simples e permissivo
- 
-
+ const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; // simples e permissivo 
 import dns from "dns";
-dns.setDefaultResultOrder?.("ipv4first");
-
+dns.setDefaultResultOrder?.("ipv4first"); 
 mongoose.set("bufferCommands", false);
+// ADD: no topo dos imports 
+import { v2 as cloudinary } from "cloudinary";
 
+// === Cloudinary (sem .env) ===
+cloudinary.config({
+  cloud_name: "dcl5uszfj",
+  api_key: "117256428392281",
+  api_secret: "3u79ceHUqqCwIipkJRjYk0aUNjs",
+});
+
+// === Multer em memória (2MB por ficheiro) ===
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024, files: 12 }, // 2MB
+  fileFilter: (req, file, cb) => {
+    if (/image\/(png|jpe?g|webp|gif|svg\+xml)/.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Tipo de ficheiro inválido"));
+  },
+});
+
+ 
 
 
 // --------------------------------- ENV ---------------------------------------
@@ -43,6 +59,7 @@ const ALLOWED_ORIGINS = [
   "https://waveled.vercel.app",
   "https://waveled-pspo.vercel.app",
   "http://localhost:5174",
+  "http://localhost:5176",
   "https://waveledadmin.vercel.app",
   "https://adminwave.waveled.com"
 ];
@@ -136,7 +153,39 @@ app.use(express.urlencoded({ extended: true, limit: "2mb" }));
  
 // app.use(hpp()); // REMOVIDO (quebrava req.query em Express 5)
 app.use(compression());
+
+
+ 
 app.use("/uploads", express.static(path.resolve(UPLOAD_DIR)));
+
+
+async function uploadFilesToCloudinary(files, folder = "waveled/images") {
+  if (!files?.length) return [];
+
+  const toUrl = (file) =>
+    new Promise((resolve, reject) => {
+      // segurança extra (além do Multer)
+      if (file.size > 2 * 1024 * 1024) {
+        return reject(new Error("Imagem excede 2MB"));
+      }
+
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: "image",
+          // opcional (só para entrega otimizada; não altera o upload):
+          transformation: [{ quality: "auto", fetch_format: "auto" }],
+        },
+        (err, result) => (err ? reject(err) : resolve(result.secure_url))
+      );
+
+      stream.end(file.buffer);
+    });
+
+  console.log("files = ", files.map(toUrl));
+  return Promise.all(files.map(toUrl)); // <- devolve array de secure_url
+}
+
 
 // -------------------------- Sanitização não invasiva -------------------------
 const stripTags = (v) =>
@@ -267,15 +316,7 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}_${nanoid(8)}${ext}`);
   },
 });
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024, files: 12 },
-  fileFilter: (req, file, cb) => {
-    if (/image\/(png|jpe?g|webp|gif|svg\+xml)/.test(file.mimetype))
-      cb(null, true);
-    else cb(new Error("Tipo de ficheiro inválido"));
-  },
-});
+ 
 
 // -------------------------------- Schemas ------------------------------------
 const { Schema } = mongoose;
@@ -441,7 +482,11 @@ const WaveledAudit = mongoose.model("WaveledAudit", AuditSchema);
 // ------------------------------ Valid & Helpers ------------------------------
 const validate = (req, res, next) => {
   const v = validationResult(req);
-  if (!v.isEmpty()) return errJson(res, "Validação falhou", 422, v.array());
+  if (!v.isEmpty()) {
+    // loga de forma útil
+    console.warn("Validation errors:", v.array());
+    return errJson(res, "Validação falhou", 422, v.array());
+  } 
   next();
 };
 
@@ -842,23 +887,21 @@ app.post(
 
 // =============================== PRODUTOS (CRUD) =============================
 app.post(
-  "/api/products", 
+  "/api/products",
   requireAuth(["admin", "editor"]),
   upload.array("images", 12),
   body("name").isString().isLength({ min: 2 }).trim(),
   body("category").isString().isLength({ min: 1 }).trim(),
   body("description_html").optional().isString(),
   body("specs_text").optional().isString(),
-  body("datasheet_url").optional().isURL().isLength({ max: 2048 }),
-  body("manual_url").optional().isURL().isLength({ max: 2048 }),
+  body("datasheet_url").optional({ checkFalsy: true }).isURL().isLength({ max: 2048 }),
+  body("manual_url").optional({ checkFalsy: true }).isURL().isLength({ max: 2048 }),
   body("sku").optional().isString().isLength({ max: 64 }),
   validate,
   audit("products.create"),
   asyncH(async (req, res) => {
     const cat = await ensureCategory(req.body.category);
-    const images = (req.files || []).map(
-      (f) => `/uploads/${path.basename(f.path)}`
-    );
+    const images = await uploadFilesToCloudinary(req.files || []);
     const p = await WaveledProduct.create({
       wl_name: req.body.name,
       wl_category: cat._id,
@@ -872,6 +915,7 @@ app.post(
     ok(res, { id: p._id }, 201);
   })
 );
+
 
 app.get(
   "/api/products", 
@@ -931,10 +975,15 @@ app.put(
       p.wl_datasheet_url = req.body.datasheet_url;
     if (req.body.manual_url !== undefined) p.wl_manual_url = req.body.manual_url;
     if (req.body.sku !== undefined) p.wl_sku = req.body.sku || undefined;
-    if (req.files?.length)
-      p.wl_images = p.wl_images.concat(
-        req.files.map((f) => `/uploads/${path.basename(f.path)}`)
-      );
+
+
+ 
+    if (req.files?.length) {
+      const newUrls = await uploadFilesToCloudinary(req.files || []);
+      p.wl_images = (p.wl_images || []).concat(newUrls);
+    }
+ 
+
     p.wl_updated_at = new Date();
     await p.save();
     ok(res, { updated: true });
@@ -1066,6 +1115,32 @@ app.get(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ============================ FEATURED (HOME 4) ==============================
 app.get("/api/featured/home", audit("featured.home.get"),
   asyncH(async (req, res) => {
@@ -1190,9 +1265,7 @@ app.post(
   validate,
   audit("success.create"),
   asyncH(async (req, res) => {
-    const images = (req.files || []).map(
-      (f) => `/uploads/${path.basename(f.path)}`
-    );
+    const images =  await uploadFilesToCloudinary(req.files || []);
     const c = await WaveledSuccessCase.create({
       wl_company_name: req.body.company_name,
       wl_title: req.body.title,
@@ -1266,7 +1339,7 @@ app.put(
     if (req.body.description_html !== undefined) c.wl_description_html = req.body.description_html;
 
     if (req.files?.length) {
-      const imgs = req.files.map((f) => `/uploads/${path.basename(f.path)}`);
+      const imgs =  await uploadFilesToCloudinary(req.files || []);
       c.wl_images = c.wl_images.concat(imgs);
     }
 
