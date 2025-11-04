@@ -50,7 +50,8 @@ const ALLOWED_ORIGINS = [
   "https://waveled-pspo.vercel.app",
   "http://localhost:5174",
   "https://waveledadmin.vercel.app",
-  "https://waveled.com"
+  "https://waveled.com",
+ "https://adminwave.waveled.com"
 ];
  
  
