@@ -1,4 +1,4 @@
- 
+  
 
 import path from "path";
 import fs from "fs";
@@ -43,43 +43,30 @@ const ALLOWED_ORIGINS = [
   "https://waveled.vercel.app",
   "https://waveled-pspo.vercel.app",
   "http://localhost:5174",
-  "https://waveledadmin.vercel.app",
-  "https://adminwave.waveled.com"
+  "https://waveledadmin.vercel.app"
 ];
  
  
 // Escolhe diretório gravável (env > /tmp em serverless > ./uploads em dev)
- 
-
-
-function resolveUploadDir() {
-  const isVercel = !!process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_REGION;
-  if (process.env.NODE_ENV === 'production' || isVercel) {
-    return path.join(os.tmpdir(), 'uploads');   // ex.: /tmp/uploads
-  }
-  return path.resolve('./uploads');             // dev local
+function resolveUploadDir() { 
+  return  path.resolve("./uploads");
 }
 
- // Cria diretório com fallback seguro para /tmp/uploads
+let UPLOAD_DIR = resolveUploadDir();
+
+// Cria diretório com fallback seguro para /tmp/uploads
 function ensureDir(p) {
   try {
     if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
     return p;
   } catch (err) {
-    // último fallback: /tmp/uploads
-    const fallback = path.join(os.tmpdir(), 'uploads');
+    console.warn("[uploads] Falhou criar", p, "→", err.message);
+    const fallback = path.join(os.tmpdir(), "uploads");
     if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
+    console.warn("[uploads] A usar fallback:", fallback);
     return fallback;
   }
 }
-
-let UPLOAD_DIR = ensureDir(resolveUploadDir());
-
- 
-
-
-
-
 
 UPLOAD_DIR = ensureDir(UPLOAD_DIR);
 console.log("[uploads] Dir:", UPLOAD_DIR);
