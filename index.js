@@ -59,6 +59,7 @@ function resolveUploadDir() {
   return path.resolve('./uploads');             // dev local
 }
 
+ // Cria diretório com fallback seguro para /tmp/uploads
 function ensureDir(p) {
   try {
     if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
@@ -73,21 +74,7 @@ function ensureDir(p) {
 
 let UPLOAD_DIR = ensureDir(resolveUploadDir());
 
-// Cria diretório com fallback seguro para /tmp/uploads
-function ensureDir(p) {
-  try {
-    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-    return p;
-  } catch (err) {
-    console.warn("[uploads] Falhou criar", p, "→", err.message);
-    const fallback = path.join(os.tmpdir(), "uploads");
-    if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
-    console.warn("[uploads] A usar fallback:", fallback);
-    return fallback;
-  }
-}
-
-
+ 
 
 
 
