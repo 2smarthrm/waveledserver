@@ -1,4 +1,3 @@
- /// no endpoint  /api/upload fazer conque usemso agora cloudflare para o uploadde
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -18,7 +17,7 @@ import morgan from "morgan";
 import { nanoid } from "nanoid";
 import session from "express-session";
 import MongoStore from "connect-mongo";
- const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; // simples e permissivo 
+ const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; 
 import dns from "dns";
 dns.setDefaultResultOrder?.("ipv4first"); 
 mongoose.set("bufferCommands", false);
