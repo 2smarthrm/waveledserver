@@ -1,4 +1,4 @@
- 
+ /// no endpoint  /api/upload fazer conque usemso agora cloudflare para o uploadde
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -1914,10 +1914,54 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
  
 
-app.post('/api/upload', requireAuth(["admin", "editor"]),upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro ausente' });
-  return res.json({ path: `/uploads/${req.file.filename}` });
-});
+// /api/upload — Cloudinary (single file)
+app.post(
+  "/api/upload",
+  requireAuth(["admin", "editor"]),
+  upload.single("file"),
+  asyncH(async (req, res) => {
+    if (!req.file) return errJson(res, "Ficheiro ausente", 400);
+
+    // segurança extra (já tens fileFilter; aqui reforça o limite)
+    if (req.file.size > 2 * 1024 * 1024) {
+      return errJson(res, "Imagem excede 2MB", 413);
+    }
+
+    // helper inline para 1 ficheiro → Cloudinary
+    const uploadOne = (file, folder = "waveled/uploads") =>
+      new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder,
+            resource_type: "image",
+            // otimização recomendada; podes ajustar à vontade:
+            transformation: [{ quality: "auto", fetch_format: "auto" }],
+            // opcional: public_id: `wl_${Date.now()}_${nanoid(6)}`
+          },
+          (err, result) => (err ? reject(err) : resolve(result))
+        );
+        stream.end(file.buffer);
+      });
+
+    try {
+      const r = await uploadOne(req.file);
+
+      // Compatível com o teu front: devolvo `url` e também `path` (alias)
+      return ok(res, {
+        url: r.secure_url,
+        path: r.secure_url,   // <- mantém compatibilidade com código antigo
+        public_id: r.public_id,
+        width: r.width,
+        height: r.height,
+        format: r.format,
+        bytes: r.bytes,
+      });
+    } catch (e) {
+      console.error("Cloudinary upload error:", e);
+      return errJson(res, "Falha no upload para Cloudinary", 502);
+    }
+  })
+);
 
 // ===== Examples CRUD
 app.get('/api/examples', async (req, res) => {
