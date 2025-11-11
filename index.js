@@ -1,3 +1,4 @@
+ /// no endpoint  /api/upload fazer conque usemso agora cloudflare para o uploadde
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -17,7 +18,7 @@ import morgan from "morgan";
 import { nanoid } from "nanoid";
 import session from "express-session";
 import MongoStore from "connect-mongo";
- const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; 
+ const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; // simples e permissivo 
 import dns from "dns";
 dns.setDefaultResultOrder?.("ipv4first"); 
 mongoose.set("bufferCommands", false);
@@ -371,6 +372,7 @@ const ProductSchema = new Schema(
       ref: "WaveledCategory",
       required: true,
     },
+    wl_categories: [{ type: Schema.Types.ObjectId, ref: "WaveledCategory", index: true }],
     wl_description_html: { type: String, default: "" },
     wl_specs_text: { type: String, default: "" },
     wl_datasheet_url: { type: String, default: "" },
@@ -882,15 +884,67 @@ app.post(
   })
 );
 
+async function ensureCategories(maybeList) {
+  const raw = Array.isArray(maybeList)
+    ? maybeList
+    : typeof maybeList === "string"
+      ? maybeList.split(",").map(s => s.trim()).filter(Boolean)
+      : [];
+
+  const out = [];
+  for (const v of raw) {
+    const c = await ensureCategory(v); // <— já tens esta função
+    if (c) out.push(c);
+  }
+  // dedup por _id
+  const seen = new Set();
+  return out.filter(c => {
+    const id = String(c._id);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
  
 
 // =============================== PRODUTOS (CRUD) =============================
+ // routes/products.js (trechos relevantes) 
+ 
+// LIST: agora filtra por wl_categories (multi) e mantém retrocompatibilidade
+app.get("/api/products", asyncH(async (req, res) => {
+  const { q, category } = req.query;
+  const find = {};
+  if (q && q.trim()) find.wl_name = { $regex: q.trim(), $options: "i" };
+  if (category) {
+    const catDoc = await ensureCategory(category);
+    if (catDoc) {
+      find.$or = [
+        { wl_categories: { $elemMatch: { $eq: catDoc._id } } },
+        { wl_category: catDoc._id },
+      ];
+    }
+  }
+  const items = await WaveledProduct.find(find)
+    .populate("wl_categories")
+    .populate("wl_category")
+    .sort({ wl_updated_at: -1, createdAt: -1 })
+    .lean();
+
+  // <<< aqui
+  // ok(res, items);
+  res.status(200).json({ data: items });
+}));
+
+
+// CREATE: aceita category (string única) e/ou categories (array ou csv)
 app.post(
   "/api/products",
   requireAuth(["admin", "editor"]),
   upload.array("images", 12),
   body("name").isString().isLength({ min: 2 }).trim(),
-  body("category").isString().isLength({ min: 1 }).trim(),
+  // "category" fica opcional porque agora podes mandar só "categories"
+  body("category").optional().isString().isLength({ min: 1 }).trim(),
+  body("categories").optional(), // pode ser array/csv; validamos manualmente
   body("description_html").optional().isString(),
   body("specs_text").optional().isString(),
   body("datasheet_url").optional({ checkFalsy: true }).isURL().isLength({ max: 2048 }),
@@ -899,44 +953,89 @@ app.post(
   validate,
   audit("products.create"),
   asyncH(async (req, res) => {
-    const cat = await ensureCategory(req.body.category);
     const images = await uploadFilesToCloudinary(req.files || []);
+
+    // Resolve categorias
+    const resolvedArray = await ensureCategories(req.body.categories);
+    // category única (retrocompat / principal)
+    let principal = null;
+    if (req.body.category) {
+      principal = await ensureCategory(req.body.category);
+      if (principal && !resolvedArray.find(c => String(c._id) === String(principal._id))) {
+        resolvedArray.unshift(principal);
+      }
+    }
+
     const p = await WaveledProduct.create({
       wl_name: req.body.name,
-      wl_category: cat._id,
+      wl_category: principal ? principal._id : (resolvedArray[0]?._id || undefined),
+      wl_categories: resolvedArray.map(c => c._id), // array principal
       wl_description_html: req.body.description_html || "",
       wl_specs_text: req.body.specs_text || "",
       wl_datasheet_url: req.body.datasheet_url || "",
       wl_manual_url: req.body.manual_url || "",
       wl_sku: req.body.sku || undefined,
       wl_images: images,
+      wl_updated_at: new Date(),
     });
+
     ok(res, { id: p._id }, 201);
   })
 );
 
-
-app.get(
-  "/api/products", 
-  query("q").optional().isString(),
-  query("category").optional().isString(),
+// UPDATE: aceita "category" (principal) e/ou "categories" (lista completa)
+app.put(
+  "/api/products/:id", 
+  requireAuth(["admin", "editor"]),
+  upload.array("images", 12),
+  param("id").isMongoId(),
   validate,
-  audit("products.list"),
+  audit("products.update"),
   asyncH(async (req, res) => {
-    const { q, category } = req.query;
-    const filter = {};
-    if (q) filter.$text = { $search: q };
-    if (category) {
-      const cat = await ensureCategory(category);
-      filter.wl_category = cat._id;
+    const p = await WaveledProduct.findById(req.params.id);
+    if (!p) return errJson(res, "Produto não encontrado", 404);
+
+    if (req.body.name) p.wl_name = req.body.name;
+
+    // principal (retrocompat)
+    if (req.body.category) {
+      const cat = await ensureCategory(req.body.category);
+      if (cat) {
+        p.wl_category = cat._id;
+        // garante que a principal também está na lista múltipla
+        p.wl_categories = Array.from(new Set([...(p.wl_categories || []), cat._id]));
+      }
     }
-    const items = await WaveledProduct.find(filter)
-      .sort({ wl_created_at: -1 })
-      .limit(200)
-      .populate("wl_category");
-    ok(res, items);
+
+    // lista completa (substitui)
+    if (req.body.categories !== undefined) {
+      const resolved = await ensureCategories(req.body.categories);
+      p.wl_categories = resolved.map(c => c._id);
+      // se não tiver sido enviado "category", define principal como a 1ª da lista múltipla
+      if (!req.body.category) {
+        p.wl_category = p.wl_categories[0] || undefined;
+      }
+    }
+
+    if (req.body.description_html !== undefined)
+      p.wl_description_html = req.body.description_html;
+    if (req.body.specs_text !== undefined) p.wl_specs_text = req.body.specs_text;
+    if (req.body.datasheet_url !== undefined)
+      p.wl_datasheet_url = req.body.datasheet_url;
+    if (req.body.manual_url !== undefined) p.wl_manual_url = req.body.manual_url;
+    if (req.body.sku !== undefined) p.wl_sku = req.body.sku || undefined;
+
+    if (req.files?.length) {
+      const newUrls = await uploadFilesToCloudinary(req.files || []);
+      p.wl_images = (p.wl_images || []).concat(newUrls);
+    }
+
+    p.wl_updated_at = new Date();
+    await p.save();
+    ok(res, { updated: true });
   })
 );
+
 
 app.get(
   "/api/products/:id", 
@@ -952,42 +1051,7 @@ app.get(
   })
 );
 
-app.put(
-  "/api/products/:id", 
-  requireAuth(["admin", "editor"]),
-  upload.array("images", 12),
-  param("id").isMongoId(),
-  validate,
-  audit("products.update"),
-  asyncH(async (req, res) => {
-    const p = await WaveledProduct.findById(req.params.id);
-    if (!p) return errJson(res, "Produto não encontrado", 404);
-    if (req.body.name) p.wl_name = req.body.name;
-    if (req.body.category) {
-      const cat = await ensureCategory(req.body.category);
-      p.wl_category = cat._id;
-    }
-    if (req.body.description_html !== undefined)
-      p.wl_description_html = req.body.description_html;
-    if (req.body.specs_text !== undefined) p.wl_specs_text = req.body.specs_text;
-    if (req.body.datasheet_url !== undefined)
-      p.wl_datasheet_url = req.body.datasheet_url;
-    if (req.body.manual_url !== undefined) p.wl_manual_url = req.body.manual_url;
-    if (req.body.sku !== undefined) p.wl_sku = req.body.sku || undefined;
-
-
  
-    if (req.files?.length) {
-      const newUrls = await uploadFilesToCloudinary(req.files || []);
-      p.wl_images = (p.wl_images || []).concat(newUrls);
-    }
- 
-
-    p.wl_updated_at = new Date();
-    await p.save();
-    ok(res, { updated: true });
-  })
-);
 
 app.delete(
   "/api/products/:id", 
@@ -1037,71 +1101,124 @@ app.post(
 );
 
 /// pegar produtos por categoria
- 
+
+
+
+// Garante que um produto pertence a uma categoria (multi ou principal)
+function productBelongsToCategory(prod, catId) {
+  if (!prod) return false;
+  const idStr = String(catId);
+  if (prod.wl_category && String(prod.wl_category) === idStr) return true;
+  if (Array.isArray(prod.wl_categories)) {
+    return prod.wl_categories.some((c) => String(c) === idStr);
+  }
+  return false;
+}
+
+// Adiciona ao doc lean um campo contextual com a categoria pedida
+function decorateWithCategoryContext(doc, cat) {
+  if (!doc) return doc;
+  return {
+    ...doc,
+    wl_matched_category: {
+      _id: String(cat._id),
+      wl_name: cat.wl_name,
+      wl_slug: cat.wl_slug,
+    },
+  };
+}
+
+
+
+
 app.get(
-  "/api/category/:categoryId/bundle", 
+  "/api/category/:categoryId/bundle",
   param("categoryId").isString(),
   validate,
   audit("category.bundle.get"),
   asyncH(async (req, res) => {
-    // 1) Garantir categoria (aceita ObjectId OU slug / nome)
+    // 1) Aceita ObjectId, slug ou nome
     const cat = await ensureCategory(req.params.categoryId);
     if (!cat) return errJson(res, "Categoria não encontrada", 404);
 
-    // 2) 3 últimos produtos dessa categoria
-    const latest3 = await WaveledProduct.find({ wl_category: cat._id })
+    const catId = cat._id;
+
+    // 2) 3 últimos produtos que pertençam à categoria (multi OU principal)
+    const latest3 = await WaveledProduct.find({
+      $or: [
+        { wl_categories: { $elemMatch: { $eq: catId } } },
+        { wl_category: catId },
+      ],
+    })
       .sort({ wl_created_at: -1, _id: -1 })
-      .limit(300)
+      .limit(3)
       .lean();
 
-    // 3) Escolher UM produto da categoria que esteja nos TOPS
-    let topDoc = await WaveledTopList.findOne({
+    // 3) Escolher UM produto desta categoria que esteja nos TOPS
+    const topDoc = await WaveledTopList.findOne({
       wl_scope: "category",
-      wl_category: cat._id,
+      wl_category: catId,
     }).lean();
 
     let topProduct = null;
+
     const pickFirstValidFrom = async (ids = []) => {
       for (const id of ids || []) {
         if (!id) continue;
-        const p = await WaveledProduct.findOne({ _id: id, wl_category: cat._id }).lean();
+        const p = await WaveledProduct.findOne({
+          _id: id,
+          $or: [
+            { wl_categories: { $elemMatch: { $eq: catId } } },
+            { wl_category: catId },
+          ],
+        }).lean();
         if (p) return p;
       }
       return null;
     };
 
     if (topDoc) {
-      // prioridade: best -> top3 -> top10
       if (topDoc.wl_best) {
         topProduct = await WaveledProduct.findOne({
           _id: topDoc.wl_best,
-          wl_category: cat._id,
+          $or: [
+            { wl_categories: { $elemMatch: { $eq: catId } } },
+            { wl_category: catId },
+          ],
         }).lean();
       }
-      if (!topProduct && Array.isArray(topDoc.wl_top3)) {
+      if (!topProduct && Array.isArray(topDoc?.wl_top3)) {
         topProduct = await pickFirstValidFrom(topDoc.wl_top3);
       }
-      if (!topProduct && Array.isArray(topDoc.wl_top10)) {
+      if (!topProduct && Array.isArray(topDoc?.wl_top10)) {
         topProduct = await pickFirstValidFrom(topDoc.wl_top10);
       }
     }
 
-    // 4) “others”: todos os produtos da categoria, EXCLUINDO latest3 e topProduct
+    // 4) “others”: todos os produtos da categoria, excluindo latest3 e topProduct
     const excludeIds = new Set(latest3.map((p) => String(p._id)));
     if (topProduct) excludeIds.add(String(topProduct._id));
 
     const others = await WaveledProduct.find({
-      wl_category: cat._id,
+      $or: [
+        { wl_categories: { $elemMatch: { $eq: catId } } },
+        { wl_category: catId },
+      ],
       _id: { $nin: Array.from(excludeIds) },
     })
       .sort({ wl_created_at: -1, _id: -1 })
       .lean();
 
+    // 5) Decora todos com a categoria pedida (contexto do tab)
+    const latest3Decorated = latest3.map((p) => decorateWithCategoryContext(p, cat));
+    const topProductDecorated = topProduct ? decorateWithCategoryContext(topProduct, cat) : null;
+    const othersDecorated = others.map((p) => decorateWithCategoryContext(p, cat));
+
     return ok(res, {
       category: { _id: cat._id, wl_name: cat.wl_name, wl_slug: cat.wl_slug },
-      latest3,
-      topProduct, // pode ser null se não houver tops definidos para a categoria
-      others,
+      latest3: latest3Decorated,
+      topProduct: topProductDecorated, // pode ser null
+      others: othersDecorated,
       counts: {
         latest3: latest3.length,
         others: others.length,
@@ -1946,6 +2063,7 @@ app.post(
       const r = await uploadOne(req.file);
 
       // Compatível com o teu front: devolvo `url` e também `path` (alias)
+      console.log(r.secure_url)
       return ok(res, {
         url: r.secure_url,
         path: r.secure_url,   // <- mantém compatibilidade com código antigo
@@ -1964,7 +2082,7 @@ app.post(
 
 // ===== Examples CRUD
 app.get('/api/examples', async (req, res) => {
-  try {
+  try { 
     const { categoryId, productId } = req.query;
     const q = {};
     if (categoryId) q.categoryId = categoryId;
