@@ -2923,17 +2923,190 @@ app.post(
     })
   );
 
-  // =============== Exemplos ===============
-  app.get(
-    '/api/solutions/:id/examples',
-    [param('id').isMongoId().withMessage('id inválido')], 
-    asyncH(async (req, res) => {
-      const err = ensureValid(req, res); if (err) return err;
-      const { id } = req.params;
-      const items = await SolutionExample.find({ solutionId: id }).sort({ createdAt: -1 }).lean();
-      return res.json({ data: items });
+  // =============== Exemplos =============== 
+
+app.get(
+  "/api/solutions/:id/examples",
+  [param("id").isMongoId().withMessage("id inválido")],
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res);
+    if (err) return err;
+
+    const { id } = req.params;
+    const solutionId = new mongoose.Types.ObjectId(id);
+
+    // 1) Garantir que a solução existe (e apanhar categorias)
+    const sol = await Solution.findById(solutionId).lean();
+    if (!sol) {
+      return res.status(404).json({ error: "Solução não encontrada" });
+    }
+
+    // Helper para remover duplicados por _id
+    const uniqById = (arr) => {
+      const seen = new Set();
+      return (arr || []).filter((x) => {
+        const _id = String(x?._id || "");
+        if (!_id || seen.has(_id)) return false;
+        seen.add(_id);
+        return true;
+      });
+    };
+
+    // ========== 2) Exemplos diretamente associados à solução ==========
+    const baseExamples = await SolutionExample.find({
+      solutionId: solutionId,
     })
-  );
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // ========== 3) Soluções relacionadas pela MESMA CATEGORIA ==========
+    let relatedSolutionIdsByCategory = [];
+    if (Array.isArray(sol.categories) && sol.categories.length > 0) {
+      const sameCategorySolutions = await Solution.find({
+        _id: { $ne: solutionId },
+        categories: { $in: sol.categories },
+      })
+        .select("_id title")
+        .lean();
+
+      relatedSolutionIdsByCategory = sameCategorySolutions.map((s) => s._id);
+    }
+
+    // ========== 4) Soluções relacionadas por PRODUTOS ==========
+    // 4.1 – produtos ligados à solução principal (SolutionRelatedProduct)
+    const relProducts = await SolutionRelatedProduct.find({
+      solutionId: solutionId,
+    })
+      .select("productId")
+      .lean();
+
+    // 4.2 – produtos ligados via kits desta solução (SolutionKit)
+    const kits = await SolutionKit.find({ solutionId })
+      .select("productIds")
+      .lean();
+
+    const productIdsSet = new Set();
+    relProducts.forEach((r) => {
+      if (r.productId) productIdsSet.add(String(r.productId));
+    });
+    kits.forEach((k) => {
+      (k.productIds || []).forEach((pid) => {
+        if (pid) productIdsSet.add(String(pid));
+      });
+    });
+
+    const productIds = Array.from(productIdsSet)
+      .filter(Boolean)
+      .map((pid) => new mongoose.Types.ObjectId(pid));
+
+    let relatedSolutionIdsByProducts = [];
+    if (productIds.length > 0) {
+      // 4.3 – outras soluções que usam estes produtos
+      const otherRels = await SolutionRelatedProduct.find({
+        productId: { $in: productIds },
+        solutionId: { $ne: solutionId },
+      })
+        .select("solutionId productId")
+        .lean();
+
+      const solIdSet = new Set(
+        otherRels.map((r) => String(r.solutionId || ""))
+      );
+
+      relatedSolutionIdsByProducts = Array.from(solIdSet)
+        .filter(Boolean)
+        .map((sid) => new mongoose.Types.ObjectId(sid));
+    }
+
+    // ========== 5) Exemplos (SolutionExample) das soluções relacionadas por CATEGORIA ==========
+    let relatedByCategoryExamples = [];
+    if (relatedSolutionIdsByCategory.length > 0) {
+      relatedByCategoryExamples = await SolutionExample.find({
+        solutionId: { $in: relatedSolutionIdsByCategory },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+    }
+
+    // ========== 6) Exemplos (SolutionExample) das soluções relacionadas por PRODUTOS ==========
+    let relatedByProductsExamples = [];
+    if (relatedSolutionIdsByProducts.length > 0) {
+      relatedByProductsExamples = await SolutionExample.find({
+        solutionId: { $in: relatedSolutionIdsByProducts },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+    }
+
+    // ========== 7) ExampleShowcase (exemplos associados a categorias / produtos) ==========
+    // categorias da própria solução
+    const categoryIds = (sol.categories || []).map((c) =>
+      String(c)
+    );
+    const catIdSet = new Set(categoryIds.filter(Boolean));
+
+    let showcaseByCategory = [];
+    if (catIdSet.size > 0) {
+      showcaseByCategory = await ExampleShowcase.find({
+        categoryId: { $in: Array.from(catIdSet) },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+    }
+
+    let showcaseByProducts = [];
+    if (productIds.length > 0) {
+      showcaseByProducts = await ExampleShowcase.find({
+        productId: { $in: productIds },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+    }
+
+    const mainExamples = uniqById(baseExamples);
+    const catExamples = uniqById(relatedByCategoryExamples);
+    const prodExamples = uniqById(relatedByProductsExamples);
+
+    // allRelated continua só com SolutionExample (para não quebrar front atual)
+    const allRelated = uniqById([...catExamples, ...prodExamples]);
+
+    const uniqShowcaseByCategory = uniqById(showcaseByCategory);
+    const uniqShowcaseByProducts = uniqById(showcaseByProducts);
+    const allShowcase = uniqById([
+      ...uniqShowcaseByCategory,
+      ...uniqShowcaseByProducts,
+    ]);
+
+    return res.json({
+      ok: true,
+      data: {
+        solution: {
+          _id: sol._id,
+          alldata: sol,
+          title: sol.title,
+          categories: sol.categories || [],
+        },
+        examples: {
+          // modelos antigos (SolutionExample)
+          main: mainExamples,
+          relatedByCategory: catExamples,
+          relatedByProducts: prodExamples,
+          allRelated,
+
+          // NOVO bloco para ExampleShowcase
+          showcase: {
+            byCategory: uniqShowcaseByCategory,
+            byProducts: uniqShowcaseByProducts,
+            allShowcase,
+          },
+        },
+      },
+    });
+  })
+);
+
+
+
 
   app.put(
   '/api/solutions/:id/examples/:exampleId',
