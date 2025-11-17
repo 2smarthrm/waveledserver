@@ -937,6 +937,8 @@ app.get("/api/products", asyncH(async (req, res) => {
 
 
 // CREATE: aceita category (string única) e/ou categories (array ou csv)
+// CREATE: aceita "category" (principal) e/ou "categories" (lista completa)
+// + NOVO: campo "link" (URL absoluto ou caminho relativo iniciando por "/")
 app.post(
   "/api/products",
   requireAuth(["admin", "editor"]),
@@ -950,6 +952,16 @@ app.post(
   body("datasheet_url").optional({ checkFalsy: true }).isURL().isLength({ max: 2048 }),
   body("manual_url").optional({ checkFalsy: true }).isURL().isLength({ max: 2048 }),
   body("sku").optional().isString().isLength({ max: 64 }),
+  // --- NOVO: validação do link (URL absoluto OU caminho relativo)
+  body("link")
+    .optional({ checkFalsy: true })
+    .custom((v) => {
+      if (typeof v !== "string") return false;
+      const s = v.trim();
+      return /^https?:\/\//i.test(s) || s.startsWith("/");
+    })
+    .withMessage('O "link" deve ser uma URL (http/https) ou um caminho relativo a começar por "/".')
+    .isLength({ max: 2048 }),
   validate,
   audit("products.create"),
   asyncH(async (req, res) => {
@@ -976,6 +988,8 @@ app.post(
       wl_manual_url: req.body.manual_url || "",
       wl_sku: req.body.sku || undefined,
       wl_images: images,
+      // --- NOVO:
+      wl_link: (req.body.link || "").trim(),
       wl_updated_at: new Date(),
     });
 
@@ -984,11 +998,22 @@ app.post(
 );
 
 // UPDATE: aceita "category" (principal) e/ou "categories" (lista completa)
+// + NOVO: campo "link"
 app.put(
   "/api/products/:id", 
   requireAuth(["admin", "editor"]),
   upload.array("images", 12),
   param("id").isMongoId(),
+  // --- NOVO: validação do link também no update
+  body("link")
+    .optional({ checkFalsy: true })
+    .custom((v) => {
+      if (typeof v !== "string") return false;
+      const s = v.trim();
+      return /^https?:\/\//i.test(s) || s.startsWith("/");
+    })
+    .withMessage('O "link" deve ser uma URL (http/https) ou um caminho relativo a começar por "/".')
+    .isLength({ max: 2048 }),
   validate,
   audit("products.update"),
   asyncH(async (req, res) => {
@@ -1025,6 +1050,9 @@ app.put(
     if (req.body.manual_url !== undefined) p.wl_manual_url = req.body.manual_url;
     if (req.body.sku !== undefined) p.wl_sku = req.body.sku || undefined;
 
+    // --- NOVO:
+    if (req.body.link !== undefined) p.wl_link = (req.body.link || "").trim();
+
     if (req.files?.length) {
       const newUrls = await uploadFilesToCloudinary(req.files || []);
       p.wl_images = (p.wl_images || []).concat(newUrls);
@@ -1036,6 +1064,7 @@ app.put(
   })
 );
 
+ 
 
 app.get(
   "/api/products/:id", 
@@ -1227,35 +1256,7 @@ app.get(
     });
   })
 );
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ 
 
 // ============================ FEATURED (HOME 4) ==============================
 app.get("/api/featured/home", audit("featured.home.get"),
@@ -2094,6 +2095,82 @@ app.get('/api/examples', async (req, res) => {
   }
 });
 
+
+// ---------------------------------------------
+// NOVO: Clonar Produto
+// ---------------------------------------------
+app.post(
+  "/api/products/:id/clone",
+  requireAuth(["admin", "editor"]),
+  asyncH(async (req, res) => {
+    const { id } = req.params;
+    const { sku, name, includeExamples } = req.body || {};
+
+    if (!sku || !sku.trim()) {
+      return res.status(400).json({ error: "SKU é obrigatório para o clone." });
+    }
+
+    const clash = await WaveledProduct.findOne({ wl_sku: sku.trim() }).lean();
+    if (clash) {
+      return res.status(409).json({ error: "Já existe um produto com esse SKU." });
+    }
+
+    const src = await WaveledProduct.findById(id).lean();
+    if (!src) {
+      return res.status(404).json({ error: "Produto de origem não encontrado." });
+    }
+
+    // Construir doc clonado (copiando campos wl_*)
+    const now = new Date();
+    const clonedDoc = {
+      wl_name: name?.trim() || src.wl_name || "",
+      wl_sku: sku.trim(),
+      wl_specs_text: src.wl_specs_text || "",
+      wl_description_html: src.wl_description_html || "",
+      wl_datasheet_url: src.wl_datasheet_url || "",
+      wl_manual_url: src.wl_manual_url || "",
+      wl_images: Array.isArray(src.wl_images) ? [...src.wl_images] : [],
+      wl_likes: 0, // normalmente recomeça
+      wl_categories: Array.isArray(src.wl_categories) ? [...src.wl_categories] : [],
+      wl_category: src.wl_category || null,
+      wl_created_at: now,
+      wl_updated_at: now,
+      // quaisquer outros campos custom que uses...
+    };
+
+    const created = await WaveledProduct.create(clonedDoc);
+
+    // Opcionalmente, clonar exemplos
+    if (includeExamples) {
+      const examples = await ExampleShowcase.find({ productId: src._id }).lean();
+      if (examples?.length) {
+        const copies = examples.map((ex) => ({
+          productId: created._id,
+          categoryId: ex.categoryId || undefined, // mantém se fizer sentido
+          title: ex.title,
+          description: ex.description || "",
+          image: ex.image,
+          createdAt: undefined, // deixa o Mongo pôr agora
+          updatedAt: undefined,
+        }));
+        if (copies.length) {
+          await ExampleShowcase.insertMany(copies);
+        }
+      }
+    }
+
+    // devolver populate se precisares
+    const withPopulates = await WaveledProduct.findById(created._id)
+      .populate("wl_categories")
+      .populate("wl_category")
+      .lean();
+
+    return res.json({ ok: true, data: withPopulates });
+  })
+);
+
+
+
 app.post('/api/examples', 
    requireAuth(["admin", "editor", "viewer"]),
   async (req, res) => {
@@ -2355,6 +2432,12 @@ const SolutionSchema = new mongoose.Schema(
     title: { type: String, required: true, index: 'text' },
     description: { type: String, default: '' },
     image: { type: String, default: '' },
+      categories: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "WaveledCategory",
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -2572,6 +2655,195 @@ app.post(
       return res.json({ ok: true });
     })
   );
+
+
+
+
+//================== asocciar categoria. auma solução ===========
+
+// --------- /api/solutions (list) ---------
+app.get(
+  "/api/solutions",
+  [
+    query("q").optional().isString().withMessage("q inválido"),
+    query("categoryId").optional().isMongoId().withMessage("categoryId inválido"),
+  ],
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res);
+    if (err) return err;
+
+    const { q, categoryId } = req.query;
+    let filter = {};
+
+    if (q && q.trim()) {
+      filter = {
+        $or: [
+          { title: { $regex: q.trim(), $options: "i" } },
+          { description: { $regex: q.trim(), $options: "i" } },
+        ],
+      };
+    }
+
+    if (categoryId) {
+      const catFilter = { categories: categoryId };
+      filter =
+        Object.keys(filter).length > 0
+          ? { $and: [filter, catFilter] }
+          : catFilter;
+    }
+
+    const items = await Solution.find(filter).sort({ createdAt: -1 }).lean();
+    return res.json({ data: items });
+  })
+);
+
+
+// --------- /api/solutions/:id/categories (add) ---------
+app.post(
+  "/api/solutions/:id/categories",
+  [
+    param("id").isMongoId().withMessage("id inválido"),
+    body("categoryId")
+      .isMongoId()
+      .withMessage("categoryId inválido"),
+  ],
+  requireAuth(["admin", "editor"]),
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res);
+    if (err) return err;
+
+    const { id } = req.params;
+    const { categoryId } = req.body || {};
+
+    const cat = await WaveledCategory.findById(categoryId);
+    if (!cat) {
+      return res.status(404).json({ error: "Categoria não encontrada" });
+    }
+
+    const sol = await Solution.findByIdAndUpdate(
+      id,
+      { $addToSet: { categories: categoryId } }, // evita duplicados
+      { new: true }
+    ).populate("categories");
+
+    if (!sol) {
+      return res.status(404).json({ error: "Solução não encontrada" });
+    }
+
+    // devolve apenas a categoria adicionada (para o update otimista no front)
+    const added = (sol.categories || []).find(
+      (c) => String(c._id) === String(categoryId)
+    );
+
+    return res.json({ ok: true, data: added || cat });
+  })
+);
+
+
+// --------- /api/solutions/:id/categories/:catId (remove) ---------
+app.delete(
+  "/api/solutions/:id/categories/:catId",
+  [
+    param("id").isMongoId().withMessage("id inválido"),
+    param("catId").isMongoId().withMessage("catId inválido"),
+  ],
+  requireAuth(["admin", "editor"]),
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res);
+    if (err) return err;
+
+    const { id, catId } = req.params;
+
+    const sol = await Solution.findByIdAndUpdate(
+      id,
+      { $pull: { categories: catId } },
+      { new: true }
+    );
+
+    if (!sol) {
+      return res.status(404).json({ error: "Solução não encontrada" });
+    }
+
+    return res.json({ ok: true });
+  })
+);
+
+
+// --------- /api/solutions/:id/categories (list) ---------
+app.get(
+  "/api/solutions/:id/categories",
+  [param("id").isMongoId().withMessage("id inválido")],
+  // podes permitir viewer também
+  requireAuth(["admin", "editor", "viewer"]),
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res);
+    if (err) return err;
+
+    const { id } = req.params;
+
+    const sol = await Solution.findById(id)
+      .populate("categories")
+      .lean();
+
+    if (!sol) {
+      return res.status(404).json({ error: "Solução não encontrada" });
+    }
+
+    return res.json({ data: sol.categories || [] });
+  })
+);
+
+
+
+
+// --------- /api/categories/:catId/solutions (listar soluções de uma categoria) ---------
+app.get(
+  "/api/categories/:catId/solutions",
+  [
+    param("catId")
+      .isMongoId()
+      .withMessage("catId inválido"),
+  ],
+ 
+  asyncH(async (req, res) => {
+    const err = ensureValid(req, res);
+    if (err) return err;
+
+    const { catId } = req.params;
+
+    // 1) garantir que a categoria existe
+    const category = await WaveledCategory.findById(catId).lean();
+    if (!category) {
+      return res.status(404).json({ error: "Categoria não encontrada" });
+    }
+
+    // 2) procurar soluções que tenham esta categoria associada
+    //    (campo: categories: [ObjectId] no modelo Solution)
+    const solutions = await Solution.find({
+      categories: catId,
+    })
+      .select("_id title image createdAt") // só os campos necessários
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // 3) podes devolver só nomes ou o objeto minimal da solução
+    //    aqui já vai com _id + title + image
+    return res.json({
+      ok: true,
+      data: {
+        category: {
+          _id: category._id,
+          wl_name: category.wl_name,
+          wl_slug: category.wl_slug,
+        },
+        solutions,
+      },
+    });
+  })
+);
+
+
+
 
   // =============== Kits ===============
 
