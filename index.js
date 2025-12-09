@@ -1,4 +1,4 @@
- /// no endpoint  /api/upload fazer conque usemso agora cloudflare para o uploadde
+  /// no endpoint  /api/upload fazer conque usemso agora cloudflare para o uploadde
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -110,13 +110,15 @@ if (USE_SENDMAIL === "true") {
     path: "/usr/sbin/sendmail",
   });
 } else {
-  transporter = nodemailer.createTransport({
-    host: "",
-    port: Number(587),
-    secure: false,
-    auth:""
-      ? { user:"", pass:""}
-      : undefined,
+    transporter = nodemailer.createTransport({  
+    service: "Gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: {
+      user: "2smarthrm@gmail.com",
+      pass: "bguvbniphmcnxdrl",
+    },
   });
 }
 
@@ -642,11 +644,8 @@ app.get("/api/me", (req, res) => {
 
 
 // ========================== FORM PÚBLICO / MENSAGENS =========================
-// POST /api/public/contact
 app.post(
-  "/api/public/contact",
-
-  // tipo
+  "/api/public/contact", 
   body("tipo")
     .isIn(["info", "quote"])
     .withMessage("Tipo inválido.")
@@ -797,6 +796,642 @@ function safeUnlinkUpload(removed) {
     console.error("safeUnlinkUpload error:", e);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+ 
+
+/* =========================================================
+ *  HELPERS
+ * =======================================================*/
+
+// Colegas internos que vão receber o email
+const INTERNAL_RECIPIENTS = [
+  {email: "kiosso.silva@exportech.com.pt", name:"Kiosso"}, 
+  {email:"fabio.catela@exportech.com.pt", name:"Fábio"}
+];
+
+// Saudação por hora
+function getSaudacaoPt(date = new Date()) {
+  const h = date.getHours();
+  if (h >= 6 && h < 12) return "Bom dia";
+  if (h >= 12 && h < 20) return "Boa tarde";
+  return "Boa noite";
+}
+
+// Data “13 de setembro de 2025 às 10:30”
+function formatDateTimePt(date = new Date()) {
+  const datePart = new Intl.DateTimeFormat("pt-PT", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+
+  const timePart = new Intl.DateTimeFormat("pt-PT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+
+  return `${datePart} às ${timePart}`;
+}
+
+ 
+function buildProjectRequestHtml(payload, destinatarioNome) {
+  const saudacao = getSaudacaoPt();
+  const dataStr = formatDateTimePt();
+
+  const {
+    nome,
+    email,
+    telefone,
+    descricao,
+    produtoNome,
+    produtoCategoria,
+    produtoImagem,
+    produtoUrl,
+  } = payload;
+
+  return `
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="pt">
+<head>
+<title>Solicitação de projeto - Waveled</title>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="x-apple-disable-message-reformatting" content="" />
+<meta content="target-densitydpi=device-dpi" name="viewport" />
+<meta content="true" name="HandheldFriendly" />
+<meta content="width=device-width" name="viewport" />
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no, url=no" />
+<style type="text/css">
+table {
+border-collapse: separate;
+table-layout: fixed;
+mso-table-lspace: 0pt;
+mso-table-rspace: 0pt
+}
+table td {
+border-collapse: collapse
+}
+.ExternalClass {
+width: 100%
+}
+.ExternalClass,
+.ExternalClass p,
+.ExternalClass span,
+.ExternalClass font,
+.ExternalClass td,
+.ExternalClass div {
+line-height: 100%
+}
+body, a, li, p, h1, h2, h3 {
+-ms-text-size-adjust: 100%;
+-webkit-text-size-adjust: 100%;
+}
+html {
+-webkit-text-size-adjust: none !important
+}
+body {
+min-width: 100%;
+Margin: 0px;
+padding: 0px;
+}
+body, #innerTable {
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale
+}
+#innerTable img+div {
+display: none;
+display: none !important
+}
+img {
+Margin: 0;
+padding: 0;
+-ms-interpolation-mode: bicubic
+}
+h1, h2, h3, p, a {
+line-height: inherit;
+overflow-wrap: normal;
+white-space: normal;
+word-break: break-word
+}
+a {
+text-decoration: none
+}
+h1, h2, h3, p {
+min-width: 100%!important;
+width: 100%!important;
+max-width: 100%!important;
+display: inline-block!important;
+border: 0;
+padding: 0;
+margin: 0
+}
+a[x-apple-data-detectors] {
+color: inherit !important;
+text-decoration: none !important;
+font-size: inherit !important;
+font-family: inherit !important;
+font-weight: inherit !important;
+line-height: inherit !important
+}
+u + #body a {
+color: inherit;
+text-decoration: none;
+font-size: inherit;
+font-family: inherit;
+font-weight: inherit;
+line-height: inherit;
+}
+a[href^="mailto"],
+a[href^="tel"],
+a[href^="sms"] {
+color: inherit;
+text-decoration: none
+}
+</style>
+<style type="text/css">
+@media (min-width: 481px) {
+.hd { display: none!important }
+}
+</style>
+<style type="text/css">
+@media (max-width: 480px) {
+.hm { display: none!important }
+}
+</style>
+<style type="text/css">
+@media (max-width: 480px) {
+.t123{mso-line-height-alt:0px!important;line-height:0!important;display:none!important}.t124{padding-left:30px!important;padding-bottom:40px!important;padding-right:30px!important}.t28{padding-bottom:20px!important}.t27{line-height:28px!important;font-size:26px!important;letter-spacing:-1.04px!important}.t138{padding:40px 30px!important}.t72{text-align:left!important}.t12,.t55{display:revert!important}.t113,.t115,.t116{display:block!important}.t57{vertical-align:middle!important;width:211px!important}.t14,.t18{vertical-align:top!important}.t19{text-align:right!important}.t18{width:80px!important}.t16{padding-bottom:50px!important}.t14{width:380px!important}.t50{width:353px!important}.t71{vertical-align:middle!important;width:800px!important}.t59,.t65{padding-left:0!important}.t115{text-align:left!important}.t113{mso-line-height-alt:15px!important;line-height:15px!important}.t114{vertical-align:top!important;display:inline-block!important;width:100%!important;max-width:800px!important}.t111{padding-bottom:15px!important;padding-right:0!important}
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800&amp;family=Albert+Sans:wght@500&amp;display=swap" rel="stylesheet" type="text/css" />
+</head>
+<body id="body" class="t144" style="min-width:100%;Margin:0px;padding:0px;background-color:#242424;">
+<div class="t143" style="background-color:#242424;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="center">
+<tr>
+<td class="t142" style="font-size:0;line-height:0;mso-line-height-rule:exactly;background-color:#242424;" valign="top" align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="center" id="innerTable">
+<tr><td><div class="t123" style="mso-line-height-rule:exactly;mso-line-height-alt:45px;line-height:45px;font-size:1px;display:block;">&nbsp;&nbsp;</div></td></tr>
+<tr><td align="center">
+<table class="t127" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+<tr><td width="600" class="t126" style="width:600px;">
+<table class="t125" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t124" style="background-color:#F8F8F8;padding:0 50px 60px 50px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100% !important;">
+<tr><td align="center">
+<table class="t26" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+<tr><td width="500" class="t25" style="width:800px;">
+<table class="t24" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t23">
+<div class="t22" style="width:100%;text-align:right;">
+  <div class="t21" style="display:inline-block;">
+    <table class="t20" role="presentation" cellpadding="0" cellspacing="0" align="right" valign="top">
+      <tr class="t19"><td></td>
+        <td class="t14" width="372.6" valign="top">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="t13" style="width:100%;">
+            <tr><td class="t11" style="padding:35px 0 0 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100% !important;">
+                <tr><td align="center">
+                  <table class="t5" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                    <tr><td width="362.6" class="t4" style="width:600px;">
+                      <table class="t3" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                        <tr><td class="t2">
+                          <p class="t1" style="margin:0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;line-height:22px;font-weight:400;font-size:16px;color:#333333;text-align:left;mso-line-height-rule:exactly;">
+                            <span class="t0" style="font-weight:bold;">Solicitação de projeto - Waveled</span>
+                          </p>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+                </td></tr>
+                <tr><td align="center">
+                  <table class="t10" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                    <tr><td width="362.6" class="t9" style="width:600px;">
+                      <table class="t8" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                        <tr><td class="t7" style="padding:0 0 22px 0;">
+                          <p class="t6" style="margin:0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;line-height:22px;font-weight:400;font-size:16px;color:#333333;text-align:left;mso-line-height-rule:exactly;">
+                            Data: ${dataStr}
+                          </p>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+                </td></tr>
+              </table>
+            </td><td class="t12" style="width:10px;" width="10"></td></tr>
+          </table>
+        </td>
+        <td class="t18" width="127.4" valign="top">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="t17" style="width:100%;">
+            <tr><td class="t16" style="padding:0 0 60px 0;">
+              <a href="${produtoUrl}" target="_blank">
+                <div style="font-size:0px;">
+                   <img class="t15" style="display:block;border:0;height:auto;width:100%;Margin:0;max-width:100%;" width="127" height="124" alt="Waveled" src="https://2d92baa0-eadf-4893-bec4-7a2b3fe14f31.b-cdn.net/e/e13b809b-5faa-4dcd-a6b7-a74ec6d3204b/0d487b61-1bae-4a60-8379-ce77291900f7.png"/>
+                </div>
+              </a>
+            </td></tr>
+          </table>
+        </td>
+        <td></td></tr>
+    </table>
+  </div>
+</div>
+</td></tr></table>
+</td></tr></table>
+</td></tr>
+
+<tr><td align="center">
+<table class="t31" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+<tr><td width="500" class="t30" style="width:600px;">
+<table class="t29" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t28" style="padding:0 0 15px 0;">
+  <h1 class="t27" style="margin:0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;line-height:26px;font-weight:400;font-size:24px;color:#333333;text-align:left;mso-line-height-rule:exactly;">
+    ${saudacao} ${destinatarioNome},
+  </h1>
+</td></tr>
+</table>
+</td></tr></table>
+</td></tr>
+
+<tr><td align="center">
+<table class="t36" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+<tr><td width="500" class="t35" style="width:600px;">
+<table class="t34" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t33" style="padding:0 0 22px 0;">
+  <p class="t32" style="margin:0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;line-height:22px;font-size:16px;color:#333333;text-align:left;mso-line-height-rule:exactly;">
+     ${descricao}
+  </p>
+</td></tr>
+</table>
+</td></tr></table>
+</td></tr>
+
+<!-- Aqui poderias pôr mais texto se quiseres -->
+
+<tr><td align="left">
+<table class="t51" role="presentation" cellpadding="0" cellspacing="0" style="Margin-right:auto;">
+<tr><td width="279" class="t50" style="width:279px;">
+<table class="t49" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t48" style="background-color:#f3f3f3;text-align:center;line-height:24px;mso-line-height-rule:exactly;padding:10px;">
+  ${
+    produtoUrl
+      ? `<a href="${produtoUrl}" style="display:block;font-family:Roboto,Arial,sans-serif;font-size:14px;font-weight:700;color:#333333;text-decoration:none;">
+           Ver produto no site da Waveled
+         </a>`
+      : `<span style="display:block;font-family:Roboto,Arial,sans-serif;font-size:14px;font-weight:700;color:#333333;">
+           Link do produto não disponível
+         </span>`
+  }
+</td></tr>
+</table>
+</td></tr></table>
+</td></tr>
+
+<tr><td><div class="t52" style="mso-line-height-rule:exactly;mso-line-height-alt:40px;line-height:40px;font-size:1px;display:block;">&nbsp;&nbsp;</div></td></tr>
+
+<!-- BLOCO PRODUTO -->
+<tr><td align="center">
+<table class="t79" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+<tr><td width="500" class="t78" style="width:800px;">
+<table class="t77" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t76" style="background-color:#F0F0F0;padding:20px;">
+<div class="t75" style="width:100%;text-align:left;">
+  <div class="t74" style="display:inline-block;">
+    <table class="t73" role="presentation" cellpadding="0" cellspacing="0" align="left" valign="middle">
+      <tr class="t72"><td></td>
+        <td class="t57" width="100.4" valign="middle">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="t56" style="width:100%;">
+            <tr>
+              <td class="t54">
+                <div style="font-size:0px;">
+                  ${
+                    produtoImagem
+                      ? `<img class="t53" style="display:block;border:0;height:auto;width:100%;Margin:0;max-width:100%;" width="90" alt="Imagem do produto" src="${produtoImagem}" />`
+                      : `<div style="width:90px;height:90px;border:1px solid #ccc;background:#fafafa;font-size:11px;color:#777;display:flex;align-items:center;justify-content:center;">Sem imagem</div>`
+                  }
+                </div>
+              </td>
+              <td class="t55" style="width:10px;" width="10"></td>
+            </tr>
+          </table>
+        </td>
+        <td class="t71" width="359.6" valign="middle">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="t70" style="width:100%;">
+            <tr><td class="t69">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100% !important;">
+                <tr><td align="center">
+                  <table class="t62" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                    <tr><td width="359.6" class="t61" style="width:600px;">
+                      <table class="t60" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                        <tr><td class="t59" style="padding:0 0 0 10px;">
+                          <h1 class="t58" style="margin:0;font-family:Roboto,Arial,sans-serif;line-height:16px;font-weight:700;font-size:14px;text-transform:uppercase;color:#1A1A1A;text-align:left;">
+                            ${produtoNome || "Nome do produto não especificado"}
+                          </h1>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+                </td></tr>
+                <tr><td><div class="t63" style="mso-line-height-rule:exactly;mso-line-height-alt:10px;line-height:10px;font-size:1px;display:block;">&nbsp;&nbsp;</div></td></tr>
+                
+              </table>
+            </td></tr>
+          </table>
+        </td>
+        <td></td></tr>
+    </table>
+  </div>
+</div>
+</td></tr></table>
+</td></tr></table>
+</td></tr>
+
+<tr><td><div class="t80" style="mso-line-height-rule:exactly;mso-line-height-alt:30px;line-height:30px;font-size:1px;display:block;">&nbsp;&nbsp;</div></td></tr>
+
+<!-- DETALHES DO CLIENTE -->
+<tr><td align="center">
+<table class="t122" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+<tr><td width="500" class="t121" style="width:600px;">
+<table class="t120" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t119" style="background-color:#F0F0F0;padding:40px;">
+<div class="t118" style="width:100%;text-align:left;">
+  <div class="t117" style="display:inline-block;">
+    <table class="t116" role="presentation" cellpadding="0" cellspacing="0" align="left" valign="top">
+      <tr class="t115"><td></td>
+        <td class="t114" width="420" valign="top">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="t112" style="width:100%;">
+            <tr><td class="t111" style="padding:0 5px 0 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100% !important;">
+                <tr><td align="center">
+                  <table class="t110" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                    <tr><td width="415" class="t109" style="width:800px;">
+                      <table class="t108" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                        <tr><td class="t107">
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100% !important;">
+                            <tr><td align="center">
+                              <table class="t85" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                                <tr><td width="415" class="t84" style="width:600px;">
+                                  <table class="t83" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                                    <tr><td class="t82">
+                                      <h1 class="t81" style="margin:0;font-family:Roboto,Arial,sans-serif;line-height:16px;font-weight:700;font-size:14px;text-transform:uppercase;color:#1A1A1A;text-align:left;">
+                                        Detalhes do cliente
+                                      </h1>
+                                    </td></tr>
+                                  </table>
+                                </td></tr>
+                              </table>
+                            </td></tr>
+                            <tr><td><div class="t86" style="mso-line-height-rule:exactly;mso-line-height-alt:10px;line-height:10px;font-size:1px;display:block;">&nbsp;&nbsp;</div></td></tr>
+                            <tr><td align="center">
+                              <table class="t91" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                                <tr><td width="415" class="t90" style="width:600px;">
+                                  <table class="t89" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                                    <tr><td class="t88">
+                                      <p class="t87" style="margin:0;font-family:'Albert Sans',Arial,sans-serif;line-height:22px;font-weight:500;font-size:12px;color:#242424;text-align:left;mso-line-height-rule:exactly;">
+                                        <strong>Nome:</strong> ${nome}
+                                      </p>
+                                    </td></tr>
+                                  </table>
+                                </td></tr>
+                              </table>
+                            </td></tr>
+                            <tr><td align="center">
+                              <table class="t96" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                                <tr><td width="415" class="t95" style="width:600px;">
+                                  <table class="t94" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                                    <tr><td class="t93">
+                                      <p class="t92" style="margin:0;font-family:'Albert Sans',Arial,sans-serif;line-height:22px;font-weight:500;font-size:12px;color:#242424;text-align:left;">
+                                        <strong>Email:</strong> ${email}
+                                      </p>
+                                    </td></tr>
+                                  </table>
+                                </td></tr>
+                              </table>
+                            </td></tr>
+                            <tr><td align="center">
+                              <table class="t101" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+                                <tr><td width="415" class="t100" style="width:600px;">
+                                  <table class="t99" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+                                    <tr><td class="t98">
+                                      <p class="t97" style="margin:0;font-family:'Albert Sans',Arial,sans-serif;line-height:22px;font-weight:500;font-size:12px;color:#242424;text-align:left;">
+                                        <strong>Telefone:</strong> ${telefone}
+                                      </p>
+                                    </td></tr>
+                                  </table>
+                                </td></tr>
+                              </table>
+                            </td></tr>
+                            <tr><td align="center"> 
+                                </td></tr>
+                              </table>
+                            </td></tr>
+                          </table>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </td>
+        <td></td></tr>
+    </table>
+  </div>
+</div>
+</td></tr></table>
+</td></tr></table>
+</td></tr>
+
+<tr><td align="center">
+<table class="t141" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+<tr><td width="600" class="t140" style="width:600px;">
+<table class="t139" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+<tr><td class="t138" style="background-color:#242424;padding:48px 50px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100% !important;">
+<tr><td align="center">
+  <table class="t132" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+    <tr><td width="500" class="t131" style="width:600px;">
+      <table class="t130" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+        <tr><td class="t129">
+          <p class="t128" style="margin:0;font-family:Roboto,Arial,sans-serif;line-height:22px;font-weight:800;font-size:18px;letter-spacing:-0.9px;color:#757575;text-align:left;">
+            Waveled é uma empresa inovadora especializada em soluções display LED, unindo eficiência, qualidade e design moderno.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</td></tr>
+<tr><td align="center">
+  <table class="t137" role="presentation" cellpadding="0" cellspacing="0" style="Margin-left:auto;Margin-right:auto;">
+    <tr><td width="500" class="t136" style="width:600px;">
+      <table class="t135" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+        <tr><td class="t134">
+          <p class="t133" style="margin:0;font-family:Roboto,Arial,sans-serif;line-height:22px;font-size:12px;color:#888888;text-align:left;">
+            Saiba mais em: <a href="https://waveled.com" style="color:#888888;text-decoration:none;">www.waveled.com</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</td></tr></table>
+</td></tr></table>
+</td></tr></table>
+</div>
+</body>
+</html>
+`;
+}
+
+ 
+
+
+ app.post(
+  "/api/public/project-request",
+  limiterPublicPost,
+  body("_hp").optional().isString().isLength({ max: 0 }).withMessage("honeypot not empty"),
+  body("nome").isString().isLength({ min: 2, max: 120 }).trim(),
+  body("email").isEmail().normalizeEmail(),
+  body("telefone").isString().isLength({ min: 5, max: 40 }).trim(),
+  body("descricao").isString().isLength({ min: 5, max: 1500 }).trim(),
+  body("produtoId").optional().isString().trim(),
+  body("produtoNome").optional().isString().trim(),
+  body("produtoCategoria").optional().isString().trim(),
+  body("produtoImagem").optional().isString().trim(),
+  body("produtoUrl").optional().isString().trim(),
+  body("origem").optional().isString().isLength({ max: 120 }).trim(),
+  body("page").optional().isString().isLength({ max: 2048 }),
+  body("utm").optional().isObject(), 
+  audit("public.project_request"),
+  asyncH(async (req, res) => { 
+    if (req.body._hp !== undefined) return ok(res, { received: true });
+
+    const now = new Date();
+ 
+    let produtoImagem = req.body.produtoImagem || "";
+    function isHttpUrl(e) {
+      return e.startsWith("https");
+    }
+ 
+    if (produtoImagem && !isHttpUrl(produtoImagem)) {
+      try { 
+        const filename = produtoImagem.replace(/^\/?uploads\/?/, "");
+        const filePath = path.resolve(UPLOAD_DIR, filename);
+ 
+        const buffer = await fs.readFile(filePath);
+ 
+        const fakeFile = {
+          buffer,
+          size: buffer.length,
+        };
+ 
+        const [cloudUrl] = await uploadFilesToCloudinary(
+          [fakeFile],
+          "waveled/images" 
+        );
+
+        if (cloudUrl) {
+          produtoImagem = cloudUrl; 
+        }
+      } catch (err) {
+        console.error("Erro ao subir imagem do produto para Cloudinary:", err); 
+      }
+    }
+
+    const payload = {
+      tipo: "project-request",
+      nome: req.body.nome,
+      email: req.body.email,
+      telefone: req.body.telefone,
+      descricao: req.body.descricao,
+      produtoId: req.body.produtoId || "",
+      produtoNome: req.body.produtoNome || "",
+      produtoCategoria: req.body.produtoCategoria || "",
+      produtoImagem,  
+      produtoUrl: req.body.produtoUrl || "",
+      origem: req.body.origem || "modal-orcamento",
+      requestedAt: now.toISOString(),
+      meta: {
+        ip: req.ip,
+        ua: req.get("user-agent") || "",
+        referer: req.get("referer") || "",
+        page: req.body.page || "",
+        utm: req.body.utm || null,
+      },
+    };
+ 
+    const blob = encrypt(payload);
+    await WaveledMessage.create({
+      wl_encrypted_blob: blob,
+      wl_source: "public_form",
+    });
+ 
+    try {
+      await Promise.all(
+        INTERNAL_RECIPIENTS.map(async (dest) => {
+          const html = buildProjectRequestHtml(payload, dest.name);
+
+        const result =   await transporter.sendMail({
+            from: '"Waveled" <no-reply@waveled.pt>',
+            to: dest.email,
+            subject: `Waveled • Nova solicitação de projeto de ${payload.nome}`,
+            html,
+          });
+ 
+          console.log(result); 
+
+        })
+      );
+    } catch (e) {
+      console.error("Email de solicitação de projeto falhou:", e); 
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Solicitação de projeto recebida com sucesso.",
+    });
+  })
+);
+
+ 
+
+
 
  
 
