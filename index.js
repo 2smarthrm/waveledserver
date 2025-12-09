@@ -61,7 +61,8 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5174",
   "http://localhost:5176",
   "https://waveledadmin.vercel.app",
-  "https://adminwave.waveled.com"
+  "https://adminwave.waveled.com",
+  "https://waveled.com"
 ];
  
  
