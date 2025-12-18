@@ -225,7 +225,7 @@ app.use(session({
   store: MongoStore.create({
     mongoUrl: MONGO_URI,
     collectionName: "waveled_sessions",
-    ttl: 60 * 60 * 8,              // 8h in store
+    ttl: 60 * 60 * 8*5,              // 8h in store
     touchAfter: 60 * 10,           // reduce writes
   }),
   cookie: {
@@ -233,7 +233,7 @@ app.use(session({
     sameSite: PRODUCTION ? "none" : "lax", // cross-site needs 'none'
     secure: PRODUCTION,                    // required when SameSite=None
     // DO NOT set domain in prod; let it default to the API host
-    maxAge: 1000 * 60 * 60 * 8,            
+    maxAge: 1000 * 60 * 60 * 8*5,            
     path: "/",                             
   },
   rolling: true,                             // refresh expiry on each response
