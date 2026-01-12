@@ -522,6 +522,8 @@ router.put(
  * TAB 5 — Application Areas CRUD (já tinhas)
  * ============================================================ */
 
+// o egt que faz todas tambem deve estar pouplado comnofme fizemso no get pot arae espeficica para pegar todos os detaljhes e dados 
+
 router.get(
   "/application-areas",
   asyncHandler(async (_req, res) => {
@@ -532,6 +534,83 @@ router.get(
     return ok(res, rows);
   })
 );
+
+
+
+
+ 
+router.get(
+  "/area-pages",
+  asyncHandler(async (_req, res) => {
+    const rows = await WaveledAreaPage.find({})
+      .populate({ path: "wl_area", select: "_id wl_solution_title" })
+      .populate({
+        path: "top_solutions.solution",
+        select: "_id wl_title wl_image wl_featured_megamenu wl_order wl_product",
+        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
+      })
+      .populate({
+        path: "most_used_solutions.solution",
+        select: "_id wl_title wl_image wl_order wl_product",
+        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
+      })
+      .populate({ path: "featured_product.product", select: "_id wl_name wl_link wl_images" })
+      .populate({ path: "slider_solutions.product", select: "_id wl_name wl_link wl_images" })
+      .populate({ path: "two_special_products.product", select: "_id wl_name wl_link wl_images" })
+      .sort({ wl_updated_at: -1 })
+      .lean();
+
+    return ok(res, rows);
+  })
+);
+
+
+
+/// cirar um endpoint como este mas que pegue todas a innves d epegar apenas uma 
+router.get(
+  "/area-pages/:areaId",
+  asyncHandler(async (req, res) => {
+    const { areaId } = req.params;
+    if (!isObjId(areaId)) return errJson(res, "areaId inválido.", 422);
+
+    const doc = await WaveledAreaPage.findOne({ wl_area: areaId })
+      .populate({ path: "wl_area", select: "_id wl_solution_title" })
+      .populate({
+        path: "top_solutions.solution",
+        select: "_id wl_title wl_image wl_featured_megamenu wl_order wl_product",
+        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
+      })
+      .populate({
+        path: "most_used_solutions.solution",
+        select: "_id wl_title wl_image wl_order wl_product",
+        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
+      })
+      .populate({ path: "featured_product.product", select: "_id wl_name wl_link wl_images" })
+      .populate({ path: "slider_solutions.product", select: "_id wl_name wl_link wl_images" })
+      .populate({ path: "two_special_products.product", select: "_id wl_name wl_link wl_images" })
+      .lean();
+
+    if (!doc) {
+      return ok(res, {
+        wl_area: areaId,
+        top_solutions: [],
+        featured_product: { product: null, images: [], title: "", description: "" },
+        slider_solutions: [],
+        two_special_products: [],
+        videos: [],
+        most_used_solutions: [],
+      });
+    }
+
+    return ok(res, doc);
+  })
+);
+
+
+
+
+
+
 
 router.post(
   "/application-areas",
@@ -615,50 +694,7 @@ router.delete(
   })
 );
 
-/* ============================================================
- * ✅ TAB 6 — Area Page Builder (NOVO)
- *    GET/PUT por areaId para o /shop?area=
- * ============================================================ */
-
-router.get(
-  "/area-pages/:areaId",
-  asyncHandler(async (req, res) => {
-    const { areaId } = req.params;
-    if (!isObjId(areaId)) return errJson(res, "areaId inválido.", 422);
-
-    const doc = await WaveledAreaPage.findOne({ wl_area: areaId })
-      .populate({ path: "wl_area", select: "_id wl_solution_title" })
-      .populate({
-        path: "top_solutions.solution",
-        select: "_id wl_title wl_image wl_featured_megamenu wl_order wl_product",
-        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
-      })
-      .populate({
-        path: "most_used_solutions.solution",
-        select: "_id wl_title wl_image wl_order wl_product",
-        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
-      })
-      .populate({ path: "featured_product.product", select: "_id wl_name wl_link wl_images" })
-      .populate({ path: "slider_solutions.product", select: "_id wl_name wl_link wl_images" })
-      .populate({ path: "two_special_products.product", select: "_id wl_name wl_link wl_images" })
-      .lean();
-
-    if (!doc) {
-      return ok(res, {
-        wl_area: areaId,
-        top_solutions: [],
-        featured_product: { product: null, images: [], title: "", description: "" },
-        slider_solutions: [],
-        two_special_products: [],
-        videos: [],
-        most_used_solutions: [],
-      });
-    }
-
-    return ok(res, doc);
-  })
-);
-
+ 
 router.put(
   "/area-pages/:areaId",
   requireAuth(["admin", "editor"]),
@@ -774,22 +810,7 @@ router.put(
   })
 );
 
-/* ============================================================
- * ✅ ADMIN — MIGRAR category-pages -> area-pages
- * ============================================================ */
-/**
- * Body:
- * {
- *   "mappings": [
- *     { "categoryId": "...", "areaId": "..." },
- *     ...
- *   ],
- *   "mode": "copy" | "replace"
- * }
- *
- * - copy (recomendado): copia para WaveledAreaPage e mantém WaveledCategoryPage intacto
- * - replace (rápido/arriscado): atualiza WaveledCategoryPage.wl_category = areaId (não recomendado)
- */
+ 
 router.post(
   "/admin/migrate-category-pages-to-area-pages",
   requireAuth(["admin"]),
