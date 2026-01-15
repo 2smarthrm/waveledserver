@@ -1515,64 +1515,234 @@ async function ensureCategories(maybeList) {
  
 
 // =============================== PRODUTOS (CRUD) ============================= 
-app.get("/api/products", asyncH(async (req, res) => {
-  const { q, category, order } = req.query;
-  const find = {};
+// Helper: resolve categoria para query SEM criar (sem upsert)
+async function resolveCategoryForQuery(nameOrId) {
+  if (!nameOrId) return null;
 
-  if (q && q.trim()) find.wl_name = { $regex: q.trim(), $options: "i" };
+  // id direto
+  if (mongoose.isValidObjectId(nameOrId)) {
+    return await WaveledCategory.findById(nameOrId).lean();
+  }
 
-  let catDoc = null;
-  if (category) {
-    catDoc = await ensureCategory(category);
-    if (catDoc) {
+  const raw = String(nameOrId).trim();
+  if (!raw) return null;
+
+  // tenta por slug
+  const bySlug = await WaveledCategory.findOne({ wl_slug: raw.toLowerCase() }).lean();
+  if (bySlug) return bySlug;
+
+  // tenta por nome normalizado (se tiveres wl_name_norm)
+  const norm = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const byNorm = await WaveledCategory.findOne({ wl_name_norm: norm }).lean();
+  if (byNorm) return byNorm;
+
+  // fallback por nome exato (caso antigo)
+  const byName = await WaveledCategory.findOne({ wl_name: raw }).lean();
+  return byName || null;
+}
+
+// (opcional) helper simples
+function isObjId(v) {
+  return mongoose.isValidObjectId(String(v || ""));
+}
+
+app.get(
+  "/api/products",
+  asyncH(async (req, res) => {
+    const { q, category, order, subcategory } = req.query;
+    const find = {};
+
+    if (q && String(q).trim()) {
+      find.wl_name = { $regex: String(q).trim(), $options: "i" };
+    }
+
+    // resolve categoria SEM criar
+    let catDoc = null;
+    if (category) {
+      catDoc = await resolveCategoryForQuery(category);
+      if (!catDoc) return errJson(res, "Categoria não encontrada.", 404);
+
       find.$or = [
         { wl_categories: { $elemMatch: { $eq: catDoc._id } } },
         { wl_category: catDoc._id },
       ];
     }
-  }
 
-  // order=custom (default) | updated
-  const wantsUpdated = String(order || "").toLowerCase() === "updated";
-
-  let query = WaveledProduct.find(find)
-    .populate({ path: "wl_categories", select: "_id wl_name wl_slug wl_order" })
-    .populate({ path: "wl_category", select: "_id wl_name wl_slug wl_order" });
-
-  if (!wantsUpdated) {
-    if (catDoc?._id) {
-      const items = await query.lean();
-
-      const catId = String(catDoc._id);
-      const withOrder = items.map((p) => {
-        const entry = (p.wl_category_orders || []).find(
-          (x) => String(x.category) === catId
-        );
-        return { ...p, __order: typeof entry?.order === "number" ? entry.order : 0 };
-      });
-
-      withOrder.sort((a, b) => {
-        if (a.__order !== b.__order) return a.__order - b.__order;
-        const au = a.wl_updated_at ? new Date(a.wl_updated_at).getTime() : 0;
-        const bu = b.wl_updated_at ? new Date(b.wl_updated_at).getTime() : 0;
-        if (bu !== au) return bu - au;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-
-      return res.status(200).json({ data: withOrder.map(({ __order, ...p }) => p) });
+    // filtro opcional por subcategoria (id)
+    if (subcategory) {
+      if (!isObjId(subcategory)) return errJson(res, "subcategory inválida.", 422);
+      find.wl_subcategories = { $elemMatch: { $eq: new mongoose.Types.ObjectId(subcategory) } };
     }
 
-    const items = await query
-      .sort({ wl_order: 1, wl_updated_at: -1, createdAt: -1 })
-      .lean();
+    const wantsUpdated = String(order || "").toLowerCase() === "updated";
 
-    return res.status(200).json({ data: items });
-  }
+    // =========================================================
+    // Helper: buscar subcats por lista de categorias (ObjectId)
+    // =========================================================
+    async function fetchSubcatsForCategoryIds(catObjectIds) {
+      if (!Array.isArray(catObjectIds) || !catObjectIds.length) return [];
 
-  const items = await query.sort({ wl_updated_at: -1, createdAt: -1 }).lean();
-  return res.status(200).json({ data: items });
-}));
- 
+      return WaveledSubCategory.find({
+        wl_categories: { $in: catObjectIds },
+      })
+        .select("_id wl_name wl_slug wl_categories")
+        .lean();
+    }
+
+    // =========================================================
+    // Helper: injeta subcategories dentro do objeto de categoria
+    // =========================================================
+    async function attachSubcatsIntoCategoryObjects(items, forceCatDoc = null) {
+      const arr = Array.isArray(items) ? items : [];
+      const catIdsSet = new Set();
+
+      // se category foi passado, força sempre essa categoria (mesmo se lista vazia)
+      if (forceCatDoc?._id) catIdsSet.add(String(forceCatDoc._id));
+
+      arr.forEach((p) => {
+        if (p?.wl_category?._id) catIdsSet.add(String(p.wl_category._id));
+        if (Array.isArray(p?.wl_categories)) {
+          p.wl_categories.forEach((c) => c?._id && catIdsSet.add(String(c._id)));
+        }
+      });
+
+      const catIds = Array.from(catIdsSet);
+      if (!catIds.length) return arr;
+
+      // ✅ converte para ObjectId (o teu bug estava aqui)
+      const catObjectIds = catIds.map((id) => new mongoose.Types.ObjectId(id));
+
+      const subs = await fetchSubcatsForCategoryIds(catObjectIds);
+
+      // map: categoryId -> [subcategories...]
+      const subMap = new Map();
+      subs.forEach((s) => {
+        const cats = Array.isArray(s.wl_categories) ? s.wl_categories : [];
+        cats.forEach((cid) => {
+          const key = String(cid);
+          if (!subMap.has(key)) subMap.set(key, []);
+          subMap.get(key).push({
+            _id: s._id,
+            wl_name: s.wl_name,
+            wl_slug: s.wl_slug,
+          });
+        });
+      });
+
+      // injeta no wl_category e wl_categories já populados
+      const injected = arr.map((p) => {
+        const next = { ...p };
+
+        if (next?.wl_category?._id) {
+          const id = String(next.wl_category._id);
+          next.wl_category = {
+            ...next.wl_category,
+            subcategories: subMap.get(id) || [],
+          };
+        }
+
+        if (Array.isArray(next?.wl_categories)) {
+          next.wl_categories = next.wl_categories.map((c) => {
+            if (!c?._id) return c;
+            const id = String(c._id);
+            return { ...c, subcategories: subMap.get(id) || [] };
+          });
+        }
+
+        return next;
+      });
+
+      // também devolve a lista “oficial” da categoria pedida (para o teu megamenu)
+      const categoryMeta = forceCatDoc?._id
+        ? {
+            _id: forceCatDoc._id,
+            wl_name: forceCatDoc.wl_name,
+            wl_slug: forceCatDoc.wl_slug,
+            wl_order: forceCatDoc.wl_order,
+            subcategories: subMap.get(String(forceCatDoc._id)) || [],
+          }
+        : null;
+
+      return { injected, categoryMeta };
+    }
+
+    // query base
+    let query = WaveledProduct.find(find)
+      .populate({ path: "wl_categories", select: "_id wl_name wl_slug wl_order" })
+      .populate({ path: "wl_category", select: "_id wl_name wl_slug wl_order" });
+
+    // =========================================================
+    // custom ordering (como tinhas)
+    // =========================================================
+    if (!wantsUpdated) {
+      if (catDoc?._id) {
+        const itemsRaw = await query.lean();
+
+        const catIdStr = String(catDoc._id);
+        const withOrder = itemsRaw.map((p) => {
+          const entry = (p.wl_category_orders || []).find(
+            (x) => String(x.category) === catIdStr
+          );
+          return {
+            ...p,
+            __order: typeof entry?.order === "number" ? entry.order : 0,
+          };
+        });
+
+        withOrder.sort((a, b) => {
+          if (a.__order !== b.__order) return a.__order - b.__order;
+          const au = a.wl_updated_at ? new Date(a.wl_updated_at).getTime() : 0;
+          const bu = b.wl_updated_at ? new Date(b.wl_updated_at).getTime() : 0;
+          if (bu !== au) return bu - au;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+
+        const { injected, categoryMeta } = await attachSubcatsIntoCategoryObjects(withOrder, catDoc);
+
+        return res.status(200).json({
+          data: injected.map(({ __order, ...p }) => p),
+          category: categoryMeta, // ✅ subcategorias da categoria, mesmo se vazia
+        });
+      }
+
+      const itemsRaw = await query
+        .sort({ wl_order: 1, wl_updated_at: -1, createdAt: -1 })
+        .lean();
+
+      const { injected } = await attachSubcatsIntoCategoryObjects(itemsRaw, null);
+      return res.status(200).json({ data: injected });
+    }
+
+    // =========================================================
+    // updated ordering
+    // =========================================================
+    const itemsRaw = await query.sort({ wl_updated_at: -1, createdAt: -1 }).lean();
+
+    if (catDoc?._id) {
+      const { injected, categoryMeta } = await attachSubcatsIntoCategoryObjects(itemsRaw, catDoc);
+      return res.status(200).json({ data: injected, category: categoryMeta });
+    }
+
+    const { injected } = await attachSubcatsIntoCategoryObjects(itemsRaw, null);
+    return res.status(200).json({ data: injected });
+  })
+);
+
+
+
+
+
+
+
+
+
+
  
 app.post(
   "/api/products",
