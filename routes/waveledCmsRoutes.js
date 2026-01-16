@@ -1,11 +1,4 @@
-/*
-  FULLCODE: CMS ROUTES
-  - mantém tudo o que tinhas
-  - adiciona:
-      ✅ Area Page Builder: /area-pages/:areaId (GET/PUT)
-      ✅ Migração admin: /admin/migrate-category-pages-to-area-pages
-  - corrige o conflito do wl_category (já tinhas corrigido também)
-*/
+ 
 
 import express from "express";
 import multer from "multer";
@@ -18,10 +11,10 @@ import {
   WaveledHomeSpecial,
   WaveledCategoryPage,
   WaveledApplicationAreas,
-  // ✅ NOVO (tens de criar este model no teu ficheiro de models)
+  WaveledHomeHeroSlide, 
   WaveledAreaPage,
 } from "../models/waveledCmsModels.js";
-
+ 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "",
   api_key: process.env.CLOUDINARY_API_KEY || "",
@@ -434,7 +427,7 @@ router.put(
       ? await uploadFilesToCloudinary(twoSpecialFiles, "waveled/category-pages/two-special")
       : [];
 
-    // ✅ wl_category NÃO entra no $set (evita conflito)
+    //  wl_category NÃO entra no $set (evita conflito)
     const clean = {
       top_solutions: normalizeOrder(payload.top_solutions || []).map((x, idx) => ({
         solution: x.solution,
@@ -857,7 +850,7 @@ router.post(
         );
         report.replaced += 1;
       } else {
-        // ✅ copy: cria/upsert no builder por área
+        //  copy: cria/upsert no builder por área
         await WaveledAreaPage.findOneAndUpdate(
           { wl_area: areaId },
           {
@@ -875,5 +868,162 @@ router.post(
     return ok(res, report);
   })
 );
+
+
+
+
+
+
+
+router.get(
+  "/area-pages/:areaId",
+  asyncHandler(async (req, res) => {
+    const { areaId } = req.params;
+    if (!isObjId(areaId)) return errJson(res, "areaId inválido.", 422);
+
+    const doc = await WaveledAreaPage.findOne({ wl_area: areaId })
+      .populate({ path: "wl_area", select: "_id wl_solution_title" })
+      .populate({
+        path: "top_solutions.solution",
+        select: "_id wl_title wl_image wl_featured_megamenu wl_order wl_product",
+        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
+      })
+      .populate({
+        path: "most_used_solutions.solution",
+        select: "_id wl_title wl_image wl_order wl_product",
+        populate: { path: "wl_product", select: "_id wl_name wl_link wl_images" },
+      })
+      .populate({ path: "featured_product.product", select: "_id wl_name wl_link wl_images" })
+      .populate({ path: "slider_solutions.product", select: "_id wl_name wl_link wl_images" })
+      .populate({ path: "two_special_products.product", select: "_id wl_name wl_link wl_images" })
+      .lean();
+
+    if (!doc) {
+      return ok(res, {
+        wl_area: areaId,
+        content_menu: [], // ✅ NOVO
+        top_solutions: [],
+        featured_product: { product: null, images: [], title: "", description: "" },
+        slider_solutions: [],
+        two_special_products: [],
+        videos: [],
+        most_used_solutions: [],
+      });
+    }
+
+    return ok(res, doc);
+  })
+);
+
+
+
+
+
+
+
+
+
+ 
+
+ 
+
+router.get(
+  "/home-hero-slides",
+  asyncHandler(async (_req, res) => {
+    const rows = await WaveledHomeHeroSlide.find({})
+      .sort({ wl_order: 1, wl_updated_at: -1 })
+      .lean();
+    return ok(res, rows);
+  })
+);
+
+router.put(
+  "/home-hero-slides/reorder",
+  requireAuth(["admin", "editor"]),
+  asyncHandler(async (req, res) => {
+    const { orderedIds = [] } = req.body || {};
+    if (!Array.isArray(orderedIds) || !orderedIds.length) return errJson(res, "orderedIds inválido.", 422);
+
+    for (const id of orderedIds) {
+      if (!isObjId(id)) return errJson(res, `ID inválido: ${id}`, 422);
+    }
+
+    const ops = orderedIds.map((id, idx) => ({
+      updateOne: { filter: { _id: id }, update: { $set: { wl_order: idx, wl_updated_at: new Date() } } },
+    }));
+    await WaveledHomeHeroSlide.bulkWrite(ops);
+
+    return ok(res, { saved: true });
+  })
+);
+
+router.post(
+  "/home-hero-slides", 
+  upload.single("image"),
+  asyncHandler(async (req, res) => {
+    const { title = "", description = "", link = "", enabled = "true" } = req.body;
+
+    if (!req.file) return errJson(res, "Imagem obrigatória.", 422);
+
+    const [url] = await uploadFilesToCloudinary([req.file], "waveled/home-hero-slides");
+
+    const doc = await WaveledHomeHeroSlide.create({
+      wl_title: String(title || "").trim(),
+      wl_description: String(description || "").trim(),
+      wl_link: String(link || "").trim(),
+      wl_image: url,
+      wl_enabled: String(enabled) !== "false",
+      wl_order: 0,
+    });
+
+    return ok(res, doc, 201);
+  })
+);
+
+router.put(
+  "/home-hero-slides/:id",
+  requireAuth(["admin", "editor"]),
+  upload.single("image"),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!isObjId(id)) return errJson(res, "ID inválido.", 422);
+
+    const doc = await WaveledHomeHeroSlide.findById(id);
+    if (!doc) return errJson(res, "Não encontrado.", 404);
+
+    const { title, description, link, enabled } = req.body;
+
+    if (title !== undefined) doc.wl_title = String(title || "").trim();
+    if (description !== undefined) doc.wl_description = String(description || "").trim();
+    if (link !== undefined) doc.wl_link = String(link || "").trim();
+    if (enabled !== undefined) doc.wl_enabled = String(enabled) !== "false";
+
+    if (req.file) {
+      const [url] = await uploadFilesToCloudinary([req.file], "waveled/home-hero-slides");
+      doc.wl_image = url;
+    }
+
+    await doc.save();
+    return ok(res, doc);
+  })
+);
+
+router.delete(
+  "/home-hero-slides/:id",
+  requireAuth(["admin", "editor"]),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!isObjId(id)) return errJson(res, "ID inválido.", 422);
+
+    await WaveledHomeHeroSlide.deleteOne({ _id: id });
+    return ok(res, { deleted: true });
+  })
+);
+
+
+
+
+
+
 
 export default router;

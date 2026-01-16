@@ -222,7 +222,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 /* ----------------------------
-  Area Pages  ✅ FIXED refs
+  Area Pages   FIXED refs
 ---------------------------- */
 const WaveledAreaPageSchema = new Schema(
   {
@@ -290,9 +290,39 @@ WaveledAreaPageSchema.pre("save", function (next) {
   next();
 });
 
-/* ----------------------------
-  Exports (safe in dev)
----------------------------- */
+
+
+ 
+const HomeHeroSlideSchema = new Schema(
+  {
+    wl_title: { type: String, default: "", trim: true },
+    wl_description: { type: String, default: "", trim: true },
+    wl_image: { type: String, required: true },
+    wl_link: { type: String, default: "", trim: true }, // ex: /contact-us, /solution?area=12
+    wl_order: { type: Number, default: 0, index: true },
+    wl_enabled: { type: Boolean, default: true, index: true },
+    wl_created_at: { type: Date, default: Date.now },
+    wl_updated_at: { type: Date, default: Date.now },
+  },
+  { collection: "waveled_home_hero_slides" }
+);
+
+HomeHeroSlideSchema.pre("save", function (next) {
+  this.wl_updated_at = new Date();
+  next();
+});
+
+ 
+
+if (process.env.NODE_ENV !== "production") {
+  resetModel("WaveledHomeHeroSlide");
+}
+
+export const WaveledHomeHeroSlide =
+  mongoose.models.WaveledHomeHeroSlide ||
+  mongoose.model("WaveledHomeHeroSlide", HomeHeroSlideSchema);
+
+ 
 export const WaveledAreaPage =
   mongoose.models.WaveledAreaPage || mongoose.model("WaveledAreaPage", WaveledAreaPageSchema);
 

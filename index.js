@@ -1734,15 +1734,6 @@ app.get(
   })
 );
 
-
-
-
-
-
-
-
-
-
  
 app.post(
   "/api/products",
