@@ -1,4 +1,3 @@
- /// no endpoint  /api/upload fazer conque usemso agora cloudflare para o uploadde
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -13,31 +12,31 @@ import { body, param, query, validationResult } from "express-validator";
 import bcrypt from "bcrypt";
 import multer from "multer";
 import nodemailer from "nodemailer";
-import crypto from "crypto";
+import crypto from "crypto"; 
 import morgan from "morgan";
 import { nanoid } from "nanoid";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 import cmsRoutes from "./routes/waveledCmsRoutes.js";
+import cmsServicesRouter from "./routes/WaveledServices.js";
 import dns from "dns";
 
 const PHONE_PT = /^(\+?\d{2,3})?\s?\d{9,12}$/; 
 dns.setDefaultResultOrder?.("ipv4first"); 
-mongoose.set("bufferCommands", false);
-// ADD: no topo dos imports 
+mongoose.set("bufferCommands", false); 
 import { v2 as cloudinary } from "cloudinary";
 
-// === Cloudinary (sem .env) ===
+ 
 cloudinary.config({
   cloud_name: "dcl5uszfj",
   api_key: "117256428392281",
   api_secret: "3u79ceHUqqCwIipkJRjYk0aUNjs",
-});
+});  
 
-// === Multer em memória (2MB por ficheiro) ===
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024, files: 12 }, // 2MB
+  limits: { fileSize: 2 * 1024 * 1024, files: 12 },  
   fileFilter: (req, file, cb) => {
     if (/image\/(png|jpe?g|webp|gif|svg\+xml)/.test(file.mimetype)) cb(null, true);
     else cb(new Error("Tipo de ficheiro inválido"));
@@ -47,8 +46,7 @@ const upload = multer({
  
  
  
-
-// --------------------------------- ENV ---------------------------------------
+ 
 const PORT =   4000;
 const MONGO_URI =  "mongodb+srv://2smarthrm_db_user:afMz4WEnx9is1N3O@cluster0.7p7g2qd.mongodb.net/";
 const SESSION_SECRET =  "478974ifhklfhnlf.jolçi49oipru98jioy89io57yth8ioeydhnmuilkgyh874iil5uej89poiu5rgejfdiklghnfmiujklyghnuijkghvnuiolvuyj";
@@ -60,7 +58,6 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3001",
   "http://localhost:3000",
   "https://waveled.vercel.app",
-  "https://waveleddarkmode.vercel.app",
   "https://waveled-pspo.vercel.app",
   "http://localhost:5174",
   "http://localhost:5176",
@@ -69,15 +66,13 @@ const ALLOWED_ORIGINS = [
   "https://waveled.com"
 ];
  
- 
-// Escolhe diretório gravável (env > /tmp em serverless > ./uploads em dev)
+  
 function resolveUploadDir() { 
   return  path.resolve("./uploads");
 }
 
 let UPLOAD_DIR = resolveUploadDir();
-
-// Cria diretório com fallback seguro para /tmp/uploads
+ 
 function ensureDir(p) {
   try {
     if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
@@ -93,8 +88,7 @@ function ensureDir(p) {
 
 UPLOAD_DIR = ensureDir(UPLOAD_DIR);
 console.log("[uploads] Dir:", UPLOAD_DIR);
-
-// mantém o teu ENC_KEY como está
+ 
 const ENC_KEY = Buffer.from(  "b8wXnR8j6r5w2KphF5sOeYlM5wqF7X2+VnZWQprP7Ks=",
   "base64"
 );
@@ -102,9 +96,7 @@ const ENC_KEY = Buffer.from(  "b8wXnR8j6r5w2KphF5sOeYlM5wqF7X2+VnZWQprP7Ks=",
 if (ENC_KEY.length !== 32) {
   console.error("ENC_KEY_BASE64 inválida (requer 32 bytes Base64).");
   process.exit(1);
-}
-// --- até aqui ---
- 
+} 
   
 
 let transporter;
@@ -127,8 +119,7 @@ if (USE_SENDMAIL === "true") {
     },
   });
 }
-
-// --------------------------------- APP ---------------------------------------
+ 
 const app = express();
 app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -137,8 +128,7 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
  
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Permite requests de ferramentas internas (ex: Postman, curl)
+    origin: (origin, callback) => { 
       if (!origin) return callback(null, true);
 
       if (ALLOWED_ORIGINS.includes(origin)) {
@@ -191,7 +181,7 @@ async function uploadFilesToCloudinary(files, folder = "waveled/images") {
 }
 
 
-// -------------------------- Sanitização não invasiva -------------------------
+
 const stripTags = (v) =>
   typeof v === "string" ? v.replace(/<[^>]*>/g, "") : v;
 
@@ -239,12 +229,12 @@ app.use(session({
 }));
 
 
-// -------------------------------- Utils --------------------------------------
+
 const ok = (res, data, code = 200) => res.status(code).json({ ok: true, data });
 const errJson = (res, message = "Erro", code = 400, issues = null) =>
   res.status(code).json({ ok: false, error: message, issues });
 
-// wrapper para try/catch em rotas async (com log)
+ 
 const asyncH =
   (fn) =>
   (req, res, next) =>
@@ -310,8 +300,7 @@ const decrypt = (blob) => {
   const dec = Buffer.concat([decipher.update(data), decipher.final()]);
   return JSON.parse(dec.toString("utf8"));
 };
-
-// Multer (uploads de imagem)
+ 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
@@ -320,8 +309,7 @@ const storage = multer.diskStorage({
   },
 });
  
-
-// -------------------------------- Schemas ------------------------------------
+ 
 const { Schema } = mongoose;
 
 const UserSchema = new Schema(
@@ -344,19 +332,19 @@ const CategorySchema = new Schema(
   {
     wl_name: { type: String, required: true, unique: true },
     wl_slug: { type: String, required: true, unique: true },
-    wl_name_norm: { type: String, index: true, unique: true }, // novo
+    wl_name_norm: { type: String, index: true, unique: true },  
     wl_order: { type: Number, default: 0, index: true },
     wl_created_at: { type: Date, default: Date.now },
   },
   { collection: "waveled_categories" }
 );
 
-// Antes de salvar, preenche wl_name_norm (lowercase, sem acentos, espaços colapsados)
+ 
 CategorySchema.pre("save", function(next) {
   const norm = (s) =>
     String(s || "")
       .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
       .replace(/\s+/g, " ")
       .trim();
   this.wl_name = this.wl_name.replace(/\s+/g, " ").trim();
@@ -399,7 +387,7 @@ const ProductSchema = new Schema(
     wl_updated_at: { type: Date, default: Date.now },
     wl_subcategories: [{ type: Schema.Types.ObjectId, ref: "WaveledSubCategory", index: true }],
   },
-  { collection: "waveled_products" }
+  { collection: "waveled_products"}
 );
 
 ProductSchema.index({ wl_subcategories: 1, wl_updated_at: -1 });
@@ -474,7 +462,7 @@ const AuditSchema = new Schema(
   { collection: "waveled_audit" }
 );
 
-// Models
+ 
 const WaveledUser = mongoose.model("WaveledUser", UserSchema);
 const WaveledCategory = mongoose.model("WaveledCategory", CategorySchema);
 const WaveledProduct = mongoose.model("WaveledProduct", ProductSchema);
@@ -494,13 +482,10 @@ const WaveledSuccessCase = mongoose.model(
 const WaveledMessage = mongoose.model("WaveledMessage", MessageSchema);
 const WaveledAudit = mongoose.model("WaveledAudit", AuditSchema);
 
-// -------------------------------- Seed mínimo --------------------------------
  
-// ------------------------------ Valid & Helpers ------------------------------
 const validate = (req, res, next) => {
   const v = validationResult(req);
-  if (!v.isEmpty()) {
-    // loga de forma útil
+  if (!v.isEmpty()) { 
     console.warn("Validation errors:", v.array());
     return errJson(res, "Validação falhou", 422, v.array());
   } 
@@ -508,21 +493,17 @@ const validate = (req, res, next) => {
 };
 
 const ensureCategory = async (nameOrId) => {
-  if (!nameOrId) throw new Error("Categoria inválida");
-
-  // Se já vier um ObjectId, devolve direto
+  if (!nameOrId) throw new Error("Categoria inválida"); 
   if (mongoose.isValidObjectId(nameOrId)) {
     const byId = await WaveledCategory.findById(nameOrId);
     if (!byId) throw new Error("Categoria não encontrada");
     return byId;
   }
-
-  // Normalização forte do nome (trim + collapse espaços) e slug
+ 
   const raw = String(nameOrId);
-  const name = raw.replace(/\s+/g, " ").trim(); // evita "  |  " virar chaves diferentes
+  const name = raw.replace(/\s+/g, " ").trim(); 
   const slug = makeSlug(name);
-
-  // 1ª tentativa: upsert idempotente (evita corrida)
+ 
   try {
     const doc = await WaveledCategory.findOneAndUpdate(
       { $or: [{ wl_slug: slug }, { wl_name: name }] },
@@ -530,10 +511,8 @@ const ensureCategory = async (nameOrId) => {
       { new: true, upsert: true }
     );
     return doc;
-  } catch (e) {
-    // Se duas requisições baterem ao mesmo tempo, uma ganha e outra apanha E11000.
-    if (e && e.code === 11000) {
-      // Busca novamente e devolve o existente
+  } catch (e) { 
+    if (e && e.code === 11000) { 
       const again = await WaveledCategory.findOne({ $or: [{ wl_slug: slug }, { wl_name: name }] });
       if (again) return again;
     }
@@ -544,8 +523,7 @@ const ensureCategory = async (nameOrId) => {
 
 
  
-
-// ============================== AUTH (SESSÕES) ===============================
+ 
 app.post("/api/auth/login",
   limiterLogin,
   body("email").isEmail(),
@@ -649,16 +627,14 @@ app.get("/api/me", (req, res) => {
   return res.status(200).json({ ok: true, data: { authenticated: true, user: req.session.user } });
 });
 
- 
-// ========================== FORM PÚBLICO / MENSAGENS =========================
+  
 app.post(
   "/api/public/contact", 
   body("tipo")
     .isIn(["info", "quote"])
     .withMessage("Tipo inválido.")
     .bail(),
-
-  // comuns
+ 
   body("nome").isString().isLength({ min: 2 }).trim().escape()
     .withMessage("Nome obrigatório."),
   body("telefone").isString().isLength({ min: 6 }).trim().escape()
@@ -667,8 +643,7 @@ app.post(
     .withMessage("Email inválido."),
   body("mensagem").isString().isLength({ min: 5 })
     .withMessage("Mensagem muito curta."),
-
-  // consent → converte e valida boolean true
+ 
   body("consent")
     .customSanitizer((v) => {
       if (v === true || v === "true" || v === 1 || v === "1") return true;
@@ -677,8 +652,7 @@ app.post(
     .isBoolean()
     .custom((v) => v === true)
     .withMessage("É necessário consentimento."),
-
-  // Campos apenas quando tipo === "quote"
+ 
   body("solucao")
     .if((value, { req }) => req.body.tipo === "quote")
     .isIn(["led-rental", "led-fixed", "led-iluminacao", "outro"])
@@ -804,18 +778,12 @@ function safeUnlinkUpload(removed) {
 
 
  
-
-/* =========================================================
- *  HELPERS
- * =======================================================*/
-
-// Colegas internos que vão receber o email
-const INTERNAL_RECIPIENTS = [
-  {email: "kiosso.silva@exportech.com.pt", name:"Kiosso"}, 
+ 
+const INTERNAL_RECIPIENTS = [ 
   {email:"fabio.catela@exportech.com.pt", name:"Fábio"}
 ];
 
-// Saudação por hora
+ 
 function getSaudacaoPt(date = new Date()) {
   const h = date.getHours();
   if (h >= 6 && h < 12) return "Bom dia";
@@ -823,7 +791,7 @@ function getSaudacaoPt(date = new Date()) {
   return "Boa noite";
 }
 
-// Data “13 de setembro de 2025 às 10:30”
+ 
 function formatDateTimePt(date = new Date()) {
   const datePart = new Intl.DateTimeFormat("pt-PT", {
     day: "2-digit",
@@ -1410,8 +1378,7 @@ text-decoration: none
 
 app.post(
   "/api/public/contact",
-  limiterPublicPost,
-  // \u201CHoneypot\u201D opcional (campo invisível que deve vir vazio no frontend)
+  limiterPublicPost, 
   body("_hp").optional().isString().isLength({ max: 0 }).withMessage("honeypot not empty"),
   body("tipo").isIn(["info", "quote"]),
   body("nome").isString().isLength({ min: 2, max: 120 }).trim(),
@@ -1424,14 +1391,12 @@ app.post(
   body("orcamentoPrevisto").optional().isString().isLength({ max: 120 }).trim(),
   body("precisaMontagem").isIn(["sim", "nao"]).withMessage("precisaMontagem inválido"),
   body("mensagem").isString().isLength({ min: 5, max: 4000 }),
-  body("consent").equals(true).withMessage("Consentimento obrigatório"),
-  // metadados opcionais
+  body("consent").equals(true).withMessage("Consentimento obrigatório"), 
   body("utm").optional().isObject(),
   body("page").optional().isString().isLength({ max: 2048 }),
   validate,
   audit("public.contact"),
-  asyncH(async (req, res) => {
-    // Guard: bloqueia bots pelo honeypot
+  asyncH(async (req, res) => { 
     if (req.body._hp !== undefined) return ok(res, { received: true });
 
     const payload = {
@@ -1458,8 +1423,7 @@ app.post(
 
     const blob = encrypt(payload);
     await WaveledMessage.create({ wl_encrypted_blob: blob, wl_source: "public_form" });
-
-    // E-mail interno
+ 
     const html = `
       <h2>Novo pedido (${payload.tipo})</h2>
       <p><strong>Nome:</strong> ${payload.nome}</p>
@@ -1486,8 +1450,7 @@ app.post(
     } catch (e) {
       console.error("Email falhou:", e);
     }
-
-    // Resposta consistente (para o teu form)
+ 
     return res.status(200).json({ ok: true, message: "Pedido recebido com sucesso." });
   })
 );
@@ -1501,10 +1464,9 @@ async function ensureCategories(maybeList) {
 
   const out = [];
   for (const v of raw) {
-    const c = await ensureCategory(v); // <— já tens esta função
+    const c = await ensureCategory(v);  
     if (c) out.push(c);
-  }
-  // dedup por _id
+  } 
   const seen = new Set();
   return out.filter(c => {
     const id = String(c._id);
@@ -1514,13 +1476,9 @@ async function ensureCategories(maybeList) {
   });
 }
  
-
-// =============================== PRODUTOS (CRUD) ============================= 
-// Helper: resolve categoria para query SEM criar (sem upsert)
+ 
 async function resolveCategoryForQuery(nameOrId) {
-  if (!nameOrId) return null;
-
-  // id direto
+  if (!nameOrId) return null; 
   if (mongoose.isValidObjectId(nameOrId)) {
     return await WaveledCategory.findById(nameOrId).lean();
   }
@@ -1528,11 +1486,11 @@ async function resolveCategoryForQuery(nameOrId) {
   const raw = String(nameOrId).trim();
   if (!raw) return null;
 
-  // tenta por slug
+ 
   const bySlug = await WaveledCategory.findOne({ wl_slug: raw.toLowerCase() }).lean();
   if (bySlug) return bySlug;
 
-  // tenta por nome normalizado (se tiveres wl_name_norm)
+ 
   const norm = raw
     .toLowerCase()
     .normalize("NFD")
@@ -1542,13 +1500,12 @@ async function resolveCategoryForQuery(nameOrId) {
 
   const byNorm = await WaveledCategory.findOne({ wl_name_norm: norm }).lean();
   if (byNorm) return byNorm;
-
-  // fallback por nome exato (caso antigo)
+ 
   const byName = await WaveledCategory.findOne({ wl_name: raw }).lean();
   return byName || null;
 }
 
-// (opcional) helper simples
+ 
 function isObjId(v) {
   return mongoose.isValidObjectId(String(v || ""));
 }
@@ -1563,7 +1520,7 @@ app.get(
       find.wl_name = { $regex: String(q).trim(), $options: "i" };
     }
 
-    // resolve categoria SEM criar
+ 
     let catDoc = null;
     if (category) {
       catDoc = await resolveCategoryForQuery(category);
@@ -1574,8 +1531,7 @@ app.get(
         { wl_category: catDoc._id },
       ];
     }
-
-    // filtro opcional por subcategoria (id)
+ 
     if (subcategory) {
       if (!isObjId(subcategory)) return errJson(res, "subcategory inválida.", 422);
       find.wl_subcategories = { $elemMatch: { $eq: new mongoose.Types.ObjectId(subcategory) } };
@@ -1583,9 +1539,7 @@ app.get(
 
     const wantsUpdated = String(order || "").toLowerCase() === "updated";
 
-    // =========================================================
-    // Helper: buscar subcats por lista de categorias (ObjectId)
-    // =========================================================
+ 
     async function fetchSubcatsForCategoryIds(catObjectIds) {
       if (!Array.isArray(catObjectIds) || !catObjectIds.length) return [];
 
@@ -1595,15 +1549,11 @@ app.get(
         .select("_id wl_name wl_slug wl_categories")
         .lean();
     }
-
-    // =========================================================
-    // Helper: injeta subcategories dentro do objeto de categoria
-    // =========================================================
+ 
     async function attachSubcatsIntoCategoryObjects(items, forceCatDoc = null) {
       const arr = Array.isArray(items) ? items : [];
       const catIdsSet = new Set();
-
-      // se category foi passado, força sempre essa categoria (mesmo se lista vazia)
+ 
       if (forceCatDoc?._id) catIdsSet.add(String(forceCatDoc._id));
 
       arr.forEach((p) => {
@@ -1615,13 +1565,12 @@ app.get(
 
       const catIds = Array.from(catIdsSet);
       if (!catIds.length) return arr;
-
-      // ✅ converte para ObjectId (o teu bug estava aqui)
+ 
       const catObjectIds = catIds.map((id) => new mongoose.Types.ObjectId(id));
 
       const subs = await fetchSubcatsForCategoryIds(catObjectIds);
 
-      // map: categoryId -> [subcategories...]
+       
       const subMap = new Map();
       subs.forEach((s) => {
         const cats = Array.isArray(s.wl_categories) ? s.wl_categories : [];
@@ -1635,8 +1584,7 @@ app.get(
           });
         });
       });
-
-      // injeta no wl_category e wl_categories já populados
+ 
       const injected = arr.map((p) => {
         const next = { ...p };
 
@@ -1659,7 +1607,7 @@ app.get(
         return next;
       });
 
-      // também devolve a lista “oficial” da categoria pedida (para o teu megamenu)
+  
       const categoryMeta = forceCatDoc?._id
         ? {
             _id: forceCatDoc._id,
@@ -1673,14 +1621,12 @@ app.get(
       return { injected, categoryMeta };
     }
 
-    // query base
+ 
     let query = WaveledProduct.find(find)
       .populate({ path: "wl_categories", select: "_id wl_name wl_slug wl_order" })
       .populate({ path: "wl_category", select: "_id wl_name wl_slug wl_order" });
 
-    // =========================================================
-    // custom ordering (como tinhas)
-    // =========================================================
+ 
     if (!wantsUpdated) {
       if (catDoc?._id) {
         const itemsRaw = await query.lean();
@@ -1708,7 +1654,7 @@ app.get(
 
         return res.status(200).json({
           data: injected.map(({ __order, ...p }) => p),
-          category: categoryMeta, // ✅ subcategorias da categoria, mesmo se vazia
+          category: categoryMeta,  
         });
       }
 
@@ -1719,10 +1665,7 @@ app.get(
       const { injected } = await attachSubcatsIntoCategoryObjects(itemsRaw, null);
       return res.status(200).json({ data: injected });
     }
-
-    // =========================================================
-    // updated ordering
-    // =========================================================
+ 
     const itemsRaw = await query.sort({ wl_updated_at: -1, createdAt: -1 }).lean();
 
     if (catDoc?._id) {
@@ -1743,7 +1686,7 @@ app.post(
   body("name").isString().isLength({ min: 2 }).trim(),
   body("category").optional().isString().isLength({ min: 1 }).trim(),
   body("categories").optional(),
-  //   NOVO:
+ 
   body("subcategories").optional(),
 
   body("description_html").optional().isString(),
@@ -1765,10 +1708,10 @@ app.post(
   asyncH(async (req, res) => {
     const images = await uploadFilesToCloudinary(req.files || []);
 
-    // Resolve categorias
+ 
     const resolvedArray = await ensureCategories(req.body.categories);
 
-    // category única (retrocompat / principal)
+ 
     let principal = null;
     if (req.body.category) {
       principal = await ensureCategory(req.body.category);
@@ -1777,7 +1720,7 @@ app.post(
       }
     }
 
-    //   Resolve subcategorias
+ 
     let subIds = [];
     try {
       subIds = await ensureSubCategories(req.body.subcategories);
@@ -1789,9 +1732,7 @@ app.post(
       wl_name: req.body.name,
 
       wl_category: principal ? principal._id : (resolvedArray[0]?._id || undefined),
-      wl_categories: resolvedArray.map((c) => c._id),
-
-      //  NOVO:
+      wl_categories: resolvedArray.map((c) => c._id), 
       wl_subcategories: subIds,
 
       wl_description_html: req.body.description_html || "",
@@ -1830,8 +1771,7 @@ app.put(
       catDoc = await ensureCategory(category);
       if (!catDoc) return errJson(res, "Categoria inválida.", 400);
     }
-
-    // updates em bulk
+ 
     const ops = unique.map((id, idx) => {
       if (!catDoc) {
         return {
@@ -1841,8 +1781,7 @@ app.put(
           },
         };
       }
-
-      // por categoria: set order no array wl_category_orders (upsert manual)
+ 
       return {
         updateOne: {
           filter: { _id: id },
@@ -1855,16 +1794,14 @@ app.put(
                       existing: { $ifNull: ["$wl_category_orders", []] },
                     },
                     in: {
-                      $concatArrays: [
-                        // remove o entry antigo dessa categoria
+                      $concatArrays: [ 
                         {
                           $filter: {
                             input: "$$existing",
                             as: "e",
                             cond: { $ne: ["$$e.category", catDoc._id] },
                           },
-                        },
-                        // adiciona o novo entry
+                        }, 
                         [{ category: catDoc._id, order: idx }],
                       ],
                     },
@@ -1888,6 +1825,8 @@ app.put(
   })
 );
 
+
+app.use("/api/cms", cmsServicesRouter);
 
 
 
@@ -1915,15 +1854,12 @@ async function ensureSubCategories(input) {
   return rows.map((r) => r._id);
 }
  
- 
-
-// UPDATE: aceita "category" (principal) e/ou "categories" (lista completa)
+  
 
 app.put("/api/products/:id",
   requireAuth(["admin", "editor"]),
   upload.array("images", 12),
-  param("id").isMongoId(),
-  //  NOVO:
+  param("id").isMongoId(), 
   body("subcategories").optional(),
   body("link")
     .optional({ checkFalsy: true })
@@ -1942,7 +1878,7 @@ app.put("/api/products/:id",
 
     if (req.body.name) p.wl_name = req.body.name;
 
-    // principal (retrocompat)
+ 
     if (req.body.category) {
       const cat = await ensureCategory(req.body.category);
       if (cat) {
@@ -1950,8 +1886,7 @@ app.put("/api/products/:id",
         p.wl_categories = Array.from(new Set([...(p.wl_categories || []), cat._id]));
       }
     }
-
-    // lista completa categorias (substitui)
+ 
     if (req.body.categories !== undefined) {
       const resolved = await ensureCategories(req.body.categories);
       p.wl_categories = resolved.map((c) => c._id);
@@ -1960,7 +1895,7 @@ app.put("/api/products/:id",
       }
     }
 
-    //   lista completa subcategorias (substitui)
+ 
     if (req.body.subcategories !== undefined) {
       try {
         const subs = await ensureSubCategories(req.body.subcategories);
@@ -1990,9 +1925,7 @@ app.put("/api/products/:id",
 );
 
 
-// ---------------------------------------------
-// NOVO: Clonar Produto
-// ---------------------------------------------
+ 
 app.post("/api/products/:id/clone",
   requireAuth(["admin", "editor"]),
   asyncH(async (req, res) => {
@@ -2013,7 +1946,7 @@ app.post("/api/products/:id/clone",
       return res.status(404).json({ error: "Produto de origem não encontrado." });
     }
 
-    // Construir doc clonado (copiando campos wl_*)
+ 
     const now = new Date();
     const clonedDoc = {
       wl_name: name?.trim() || src.wl_name || "",
@@ -2023,27 +1956,26 @@ app.post("/api/products/:id/clone",
       wl_datasheet_url: src.wl_datasheet_url || "",
       wl_manual_url: src.wl_manual_url || "",
       wl_images: Array.isArray(src.wl_images) ? [...src.wl_images] : [],
-      wl_likes: 0, // normalmente recomeça
+      wl_likes: 0, 
       wl_categories: Array.isArray(src.wl_categories) ? [...src.wl_categories] : [],
       wl_category: src.wl_category || null,
       wl_created_at: now,
-      wl_updated_at: now,
-      // quaisquer outros campos custom que uses...
+      wl_updated_at: now, 
     };
 
     const created = await WaveledProduct.create(clonedDoc);
 
-    // Opcionalmente, clonar exemplos
+ 
     if (includeExamples) {
       const examples = await ExampleShowcase.find({ productId: src._id }).lean();
       if (examples?.length) {
         const copies = examples.map((ex) => ({
           productId: created._id,
-          categoryId: ex.categoryId || undefined, // mantém se fizer sentido
+          categoryId: ex.categoryId || undefined,  
           title: ex.title,
           description: ex.description || "",
           image: ex.image,
-          createdAt: undefined, // deixa o Mongo pôr agora
+          createdAt: undefined,  
           updatedAt: undefined,
         }));
         if (copies.length) {
@@ -2052,7 +1984,7 @@ app.post("/api/products/:id/clone",
       }
     }
 
-    // devolver populate se precisares
+ 
     const withPopulates = await WaveledProduct.findById(created._id)
       .populate("wl_categories")
       .populate("wl_category")
@@ -2093,7 +2025,7 @@ app.delete(
   })
 );
 
-// Likes
+ 
 app.post(
   "/api/products/:id/like", 
   requireAuth(["admin", "editor", "viewer"]),
@@ -2129,7 +2061,7 @@ app.post(
 
  
 
-// Garante que um produto pertence a uma categoria (multi ou principal)
+ 
 function productBelongsToCategory(prod, catId) {
   if (!prod) return false;
   const idStr = String(catId);
@@ -2139,8 +2071,7 @@ function productBelongsToCategory(prod, catId) {
   }
   return false;
 }
-
-// Adiciona ao doc lean um campo contextual com a categoria pedida
+ 
 function decorateWithCategoryContext(doc, cat) {
   if (!doc) return doc;
   return {
@@ -2159,14 +2090,13 @@ app.get(
   param("categoryId").isString(),
   validate,
   audit("category.bundle.get"),
-  asyncH(async (req, res) => {
-    // 1) Aceita ObjectId, slug ou nome
+  asyncH(async (req, res) => { 
     const cat = await ensureCategory(req.params.categoryId);
     if (!cat) return errJson(res, "Categoria não encontrada", 404);
 
     const catId = cat._id;
 
-    // 2) 3 últimos produtos que pertençam à categoria (multi OU principal)
+ 
     const latest3 = await WaveledProduct.find({
       $or: [
         { wl_categories: { $elemMatch: { $eq: catId } } },
@@ -2177,7 +2107,7 @@ app.get(
       .limit(3)
       .lean();
 
-    // 3) Escolher UM produto desta categoria que esteja nos TOPS
+ 
     const topDoc = await WaveledTopList.findOne({
       wl_scope: "category",
       wl_category: catId,
@@ -2218,7 +2148,7 @@ app.get(
       }
     }
 
-    // 4) “others”: todos os produtos da categoria, excluindo latest3 e topProduct
+ 
     const excludeIds = new Set(latest3.map((p) => String(p._id)));
     if (topProduct) excludeIds.add(String(topProduct._id));
 
@@ -2232,7 +2162,7 @@ app.get(
       .sort({ wl_created_at: -1, _id: -1 })
       .lean();
 
-    // 5) Decora todos com a categoria pedida (contexto do tab)
+ 
     const latest3Decorated = latest3.map((p) => decorateWithCategoryContext(p, cat));
     const topProductDecorated = topProduct ? decorateWithCategoryContext(topProduct, cat) : null;
     const othersDecorated = others.map((p) => decorateWithCategoryContext(p, cat));
@@ -2240,7 +2170,7 @@ app.get(
     return ok(res, {
       category: { _id: cat._id, wl_name: cat.wl_name, wl_slug: cat.wl_slug },
       latest3: latest3Decorated,
-      topProduct: topProductDecorated, // pode ser null
+      topProduct: topProductDecorated, 
       others: othersDecorated,
       counts: {
         latest3: latest3.length,
@@ -2252,7 +2182,7 @@ app.get(
 );
  
 
-// ============================ FEATURED (HOME 4) ==============================
+ 
 app.get("/api/featured/home", audit("featured.home.get"),
   asyncH(async (req, res) => {
     const doc = await WaveledFeaturedHome.findOne({}).populate("wl_slots");
@@ -2279,7 +2209,7 @@ app.put(
   })
 );
 
-// ========================== FEATURED (LISTA GERAL) ===========================
+ 
 app.post(
   "/api/featured",
   limiterAuth,
@@ -2333,7 +2263,7 @@ app.delete(
   })
 );
 
-// ============================= RELACIONADOS ==================================
+ 
 app.get(
   "/api/products/:id/related",
   limiterAuth,
@@ -2364,7 +2294,7 @@ app.get(
   })
 );
 
-// ============================ CASOS DE SUCESSO ===============================
+ 
 app.post(
   "/api/success-cases",
   limiterAuth,
@@ -2413,7 +2343,7 @@ app.delete(
 );
 
  
-// GET one by id
+ 
 app.get(
   "/api/success-cases/:id",
   audit("success.get"),
@@ -2428,7 +2358,7 @@ app.get(
 
  
 
-// --------------------------- SUCCESS CASES (CRUD+) --------------------------- 
+ 
 app.put(
   "/api/success-cases/:id",
   limiterAuth,
@@ -2457,8 +2387,8 @@ app.put(
     ok(res, { updated: true, id: c._id, images: c.wl_images });
   })
 );
+ 
 
-// 2) Remover UMA imagem específica do caso de sucesso (por src OU index)
 app.delete(
   "/api/success-cases/:id/images",
   limiterAuth,
@@ -2500,13 +2430,13 @@ app.delete(
   })
 );
 
-// 3) (Opcional) Reordenar imagens do caso de sucesso
+ 
 app.put(
   "/api/success-cases/:id/images/reorder",
   limiterAuth,
   requireAuth(["admin", "editor"]),
   param("id").isMongoId(),
-  body("order").isArray({ min: 1 }), // array de novas posições por índice atual
+  body("order").isArray({ min: 1 }),  
   validate,
   audit("success.image.reorder"),
   asyncH(async (req, res) => {
@@ -2528,8 +2458,7 @@ app.put(
   })
 );
 
-
-// ================================ TOP LISTS ==================================
+ 
 app.get(
   "/api/top/overall",
   limiterAuth,
@@ -2620,17 +2549,17 @@ app.put(
 
 
 
-// --- slug helper (coloca junto com os outros helpers) ---
+ 
 const makeSlug = (name) =>
   String(name || "")
     .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
 
 
-// Remover UMA imagem do produto (por src ou index)
+ 
 app.delete(
   "/api/products/:id/images",
   limiterAuth,
@@ -2694,17 +2623,9 @@ app.delete(
 );
 
 
-// ============================== “ CATEGORIAS ” ================================ 
-
-
-
-
-
-
-
  
 
-// ===================== SUBCATEGORY SCHEMA + MODEL =====================
+  
 const SubCategorySchema = new Schema(
   {
     wl_name: { type: String, required: true },
@@ -2716,13 +2637,12 @@ const SubCategorySchema = new Schema(
   },
   { collection: "waveled_subcategories" }
 );
-
-// Evita duplicados do mesmo slug em categorias iguais
+ 
 SubCategorySchema.index({ wl_slug: 1, wl_categories: 1 }, { unique: true });
 
 const WaveledSubCategory = mongoose.model("WaveledSubCategory", SubCategorySchema);
 
-// ===================== ENDPOINT: CATEGORIES + SUBCATEGORIES =====================
+ 
 app.get(
   "/api/categories-with-subcategories",
   asyncH(async (req, res) => {
@@ -2745,9 +2665,7 @@ app.get(
   })
 );
 
-// ===================== SUBCATEGORIES CRUD =====================
-
-// CREATE subcategory (associada a 1+ categorias)
+ 
 app.post(
   "/api/subcategories",
   requireAuth(["admin", "editor"]),
@@ -2757,17 +2675,15 @@ app.post(
   asyncH(async (req, res) => {
     const { name, categories } = req.body;
 
-    // valida ids
+ 
     const ids = (categories || []).filter((x) => mongoose.isValidObjectId(x));
     if (!ids.length) return errJson(res, "Categorias inválidas", 422);
-
-    // valida categorias existentes
+ 
     const existsCats = await WaveledCategory.find({ _id: { $in: ids } }).select("_id");
     if (existsCats.length !== ids.length) return errJson(res, "Uma ou mais categorias não existem", 422);
 
     const slug = makeSlug(name);
-
-    // evitar duplicado exato (mesmo slug e mesmo set de categorias)
+ 
     const already = await WaveledSubCategory.findOne({
       wl_slug: slug,
       wl_categories: { $all: ids },
@@ -2784,8 +2700,7 @@ app.post(
     ok(res, sc, 201);
   })
 );
-
-// LIST all subcategories (opcional)
+ 
 app.get(
   "/api/subcategories",
   requireAuth(["admin", "editor"]),
@@ -2796,8 +2711,7 @@ app.get(
     ok(res, rows);
   })
 );
-
-// UPDATE subcategory (nome, slug opcional, categorias opcional)
+ 
 app.put(
   "/api/subcategories/:id",
   requireAuth(["admin", "editor"]),
@@ -2814,8 +2728,7 @@ app.put(
     const payload = {};
 
     if (req.body.name) {
-      payload.wl_name = String(req.body.name).trim().replace(/\s+/g, " ");
-      // se não mandarem slug, podemos recalcular (opcional)
+      payload.wl_name = String(req.body.name).trim().replace(/\s+/g, " "); 
       if (!req.body.slug) payload.wl_slug = makeSlug(payload.wl_name);
     }
 
@@ -2836,8 +2749,7 @@ app.put(
   })
 );
 
-
-// DELETE subcategory ONLY FROM ONE CATEGORY
+ 
 app.delete(
   "/api/subcategories/:id/from-category/:categoryId",
   requireAuth(["admin", "editor"]),
@@ -2849,20 +2761,17 @@ app.delete(
 
     const sc = await WaveledSubCategory.findById(id);
     if (!sc) return errJson(res, "Subcategoria não encontrada", 404);
-
-    // verificar se a categoria está associada
+ 
     const before = sc.wl_categories.length;
 
     sc.wl_categories = sc.wl_categories.filter(
       (cId) => String(cId) !== String(categoryId)
     );
-
-    // se não havia associação, não faz nada
+ 
     if (sc.wl_categories.length === before) {
       return errJson(res, "Subcategoria não estava associada a esta categoria", 400);
     }
-
-    // se ainda tiver categorias, apenas guarda
+ 
     if (sc.wl_categories.length > 0) {
       await sc.save();
       return ok(res, {
@@ -2870,8 +2779,7 @@ app.delete(
         removedFromCategory: categoryId,
       });
     }
-
-    // se não sobrou nenhuma categoria → apagar subcategoria
+ 
     await WaveledSubCategory.deleteOne({ _id: id });
 
     ok(res, {
@@ -2896,9 +2804,7 @@ async function normalizeCategoryOrder(WaveledCategory) {
   if (ops.length) await WaveledCategory.bulkWrite(ops);
 }
 
-/**
- * Próximo valor de ordem (fim da fila).
- */
+ 
 async function nextOrder(WaveledCategory) {
   const last = await WaveledCategory.findOne({}).sort({ wl_order: -1 });
   return typeof last?.wl_order === "number" ? last.wl_order + 1 : 0;
@@ -2909,32 +2815,26 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     .map((x) => (typeof x === "string" ? x : x?._id))
     .filter(Boolean)
     .map(String);
-
-  // Sanidade: sem duplicados
+ 
   const uniq = [...new Set(orderedIds)];
   if (uniq.length !== orderedIds.length) {
     const err = new Error("IDs duplicados na ordenação");
     err.status = 400;
     throw err;
   }
-
-  // Todos que existem
+ 
   const all = await WaveledCategory.find({}).sort({ wl_order: 1, wl_name: 1 });
-  const allIds = all.map((d) => String(d._id));
-
-  // Verifica se todos orderedIds existem (os que foram passados)
+  const allIds = all.map((d) => String(d._id)); 
   const notFound = uniq.filter((id) => !allIds.includes(id));
   if (notFound.length) {
     const err = new Error(`Alguns IDs não existem: ${notFound.join(", ")}`);
     err.status = 400;
     throw err;
   }
-
-  // Constrói nova ordem: primeiro os enviados, depois os restantes
+ 
   const remaining = allIds.filter((id) => !uniq.includes(id));
   const finalOrder = [...uniq, ...remaining];
-
-  // Persiste SEMPRE com $set
+ 
   const bulkOps = finalOrder.map((id, idx) => ({
     updateOne: {
       filter: { _id: id },
@@ -2947,9 +2847,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
  
  
  
-
-// =============================== CATEGORIES (CRUD + ORDER) ===============================
-
+ 
  
   app.get(
     "/api/categories",
@@ -2968,7 +2866,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
 
 
 
-  // GET /api/categories/:idOrSlug
+ 
   app.get(
     "/api/categories/:idOrSlug",
     limiterAuth,
@@ -2988,7 +2886,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     })
   );
 
-  // POST /api/categories
+ 
   app.post(
     "/api/categories",
     limiterAuth,
@@ -3019,7 +2917,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     })
   );
 
-  // PUT /api/categories/:id
+ 
   app.put(
     "/api/categories/:id",
     limiterAuth,
@@ -3042,7 +2940,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
         cat.wl_slug = makeSlug(req.body.name);
       }
 
-      // garantir unicidade
+    
       const conflict = await WaveledCategory.findOne({
         _id: { $ne: cat._id },
         $or: [{ wl_name: cat.wl_name }, { wl_slug: cat.wl_slug }],
@@ -3054,7 +2952,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     })
   );
 
-  // DELETE /api/categories/:id
+ 
   app.delete(
     "/api/categories/:id",
     limiterAuth,
@@ -3083,7 +2981,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
     })
   );
 
-  // POST /api/categories/reorder  (ordem completa)
+ 
   app.post(
     "/api/categories/reorder",
     limiterAuth,
@@ -3096,9 +2994,9 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
       await reorderFull(WaveledCategory, req.body.orderedIds);
       ok(res, { reordered: true });
     })
-  );
+  ); 
 
-  // PATCH /api/categories/:id/reorder-step  (↑/↓ 1 passo)
+
   app.patch(
     "/api/categories/:id/reorder-step",
     limiterAuth,
@@ -3121,8 +3019,7 @@ async function reorderFull(WaveledCategory, orderedIdsRaw) {
 
       const a = list[idx];
       const b = list[swapWith];
-
-      // swap seguro SEMPRE com $set
+ 
       await WaveledCategory.bulkWrite([
         { updateOne: { filter: { _id: a._id }, update: { $set: { wl_order: b.wl_order } } } },
         { updateOne: { filter: { _id: b._id }, update: { $set: { wl_order: a.wl_order } } } },
@@ -3151,7 +3048,7 @@ const CategoryVideoSchema = new mongoose.Schema(
   {
     categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', unique: true, index: true },
     videoUrl:   { type: String, default: '' },
-    videoText:  { type: String, default: '' }, // rich text (html)
+    videoText:  { type: String, default: '' }, 
   },
   { timestamps: true }
 );
@@ -3167,13 +3064,12 @@ const CategoryStyleSchema = new mongoose.Schema(
 );
 const CategoryStyle = mongoose.model('CategoryStyle', CategoryStyleSchema);
 
-// ===== Upload (images)
+ 
 const uploadDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
  
-
-// /api/upload se    — Cloudinary (single file)
+ 
 app.post(
   "/api/upload",
   requireAuth(["admin", "editor"]),
@@ -3216,8 +3112,7 @@ app.post(
     }
   })
 );
-
-// ===== Examples CRUD
+ 
 app.get('/api/examples', async (req, res) => {
   try { 
     const { categoryId, productId } = req.query;
@@ -3284,27 +3179,20 @@ app.patch('/api/examples/:id',   requireAuth(["admin", "editor"]), async (req, r
     const { id } = req.params;
     if (!isObjectId(id)) {
       return res.status(400).json({ error: 'id inválido' });
-    }
-
-    // Campos permitidos para update
+    } 
     const allowed = ['title', 'description', 'image', 'categoryId', 'productId'];
     const payload = {};
     for (const k of allowed) {
       if (k in req.body) payload[k] = req.body[k];
     }
-
-    // nada a atualizar?
+ 
     if (Object.keys(payload).length === 0) {
       return res.status(400).json({ error: 'nenhum campo válido para atualização' });
     }
-
-    // regra opcional: pelo menos um dos dois se ambos existirem no update
-    // (se quiseres obrigar a ter sempre um dos dois definidos no doc final)
+ 
     if ('categoryId' in payload || 'productId' in payload) {
       const nextCategory = ('categoryId' in payload) ? payload.categoryId : undefined;
-      const nextProduct  = ('productId'  in payload) ? payload.productId  : undefined;
-
-      // Se quiseres forçar que pelo menos um exista após update, busca doc atual
+      const nextProduct  = ('productId'  in payload) ? payload.productId  : undefined; 
       const current = await ExampleShowcase.findById(id).lean();
       if (!current) return res.status(404).json({ error: 'registo não encontrado' });
 
@@ -3332,28 +3220,22 @@ app.patch('/api/examples/:id',   requireAuth(["admin", "editor"]), async (req, r
   }
 });
 
-
-// ===== Category Video 
+ 
 async function resolveCategoryId(idOrName) {
   const key = String(idOrName || "").trim();
-  if (!key) return null;
-
-  // 1) ObjectId
+  if (!key) return null; 
   if (Types.ObjectId.isValid(key)) {
     return key;
   }
-
-  // 2) slug (lowercase exato)
+ 
   const slug = key.toLowerCase();
   let cat = await WaveledCategory.findOne({ wl_slug: slug }, { _id: 1 }).lean();
   if (cat?._id) return String(cat._id);
-
-  // 3) nome normalizado (case/acento-insensitive)
+ 
   const norm = normalizeName(key);
   cat = await WaveledCategory.findOne({ wl_name_norm: norm }, { _id: 1 }).lean();
   if (cat?._id) return String(cat._id);
-
-  // 4) opcional: match exato case-insensitive em wl_name (fallback)
+ 
   cat = await WaveledCategory.findOne(
     { wl_name: { $regex: `^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" } },
     { _id: 1 }
@@ -3363,16 +3245,11 @@ async function resolveCategoryId(idOrName) {
   return null; 
 }
 
- 
-/* =========================
-   ROUTES: STYLE
-   Aceita :id como ObjectId, wl_slug ou wl_name
-========================= */ 
+  
 app.get('/api/categories/:id/style', async (req, res) => {
   try {
     const cid = await resolveCategoryId(req.params.id);
-    if (!cid) {
-      // mantém resposta vazia se não encontrou
+    if (!cid) { 
       return res.json({ data: {} });
     }
     const doc = await CategoryStyle.findOne({ categoryId: cid }).lean();
@@ -3382,7 +3259,7 @@ app.get('/api/categories/:id/style', async (req, res) => {
   }
 });
 
-// PUT /api/categories/:id/style
+ 
 app.put('/api/categories/:id/style',   requireAuth(["admin", "editor", "viewer"]), async (req, res) => {
   try {
     const cid = await resolveCategoryId(req.params.id);
@@ -3400,12 +3277,7 @@ app.put('/api/categories/:id/style',   requireAuth(["admin", "editor", "viewer"]
   }
 });
 
-/* =========================
-   ROUTES: VIDEO
-   Aceita :id como ObjectId, wl_slug ou wl_name
-========================= */
-
-// GET /api/categories/:id/video
+ 
 app.get('/api/categories/:id/video',   requireAuth(["admin", "editor", "viewer"]), async (req, res) => {
   try {
     const cid = await resolveCategoryId(req.params.id);
@@ -3419,7 +3291,7 @@ app.get('/api/categories/:id/video',   requireAuth(["admin", "editor", "viewer"]
   }
 });
 
-// PUT /api/categories/:id/video
+ 
 app.put('/api/categories/:id/video', requireAuth(["admin", "editor", "viewer"]),  async (req, res) => {
   try {
     const cid = await resolveCategoryId(req.params.id);
@@ -3440,8 +3312,7 @@ app.put('/api/categories/:id/video', requireAuth(["admin", "editor", "viewer"]),
  
  
 
-//================================ "SOLUÇÕES" ================================== 
-
+ 
 const ensureValid = (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -3449,7 +3320,7 @@ const ensureValid = (req, res) => {
   }
 };
 
-// ===================== Schemas/Models ===================== 
+ 
 const SolutionSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, index: 'text' },
@@ -3471,7 +3342,7 @@ const SolutionSchema = new mongoose.Schema(
   { timestamps: true }
 );
  
-const Solution = mongoose.model('Solution', SolutionSchema); // como criar o campo order nas solutions shema
+const Solution = mongoose.model('Solution', SolutionSchema); 
 
 const SolutionRelatedProductSchema = new mongoose.Schema(
   {
@@ -3504,8 +3375,7 @@ const SolutionExampleSchema = new mongoose.Schema(
 );
 const SolutionExample = mongoose.model('SolutionExample', SolutionExampleSchema);
 
-// ===================== Router/Module =====================
-
+ 
 
 const { Types } = mongoose;
 async function getProductsBasic(ids = []) {
@@ -3534,13 +3404,13 @@ async function getProductsBasic(ids = []) {
     .sort({ order: 1, createdAt: 1, _id: 1 })
     .lean();
 
-  // se houver duplicados ou muitos 9999, resequenciar
+ 
   const orders = sols.map(s => Number(s.order));
   const hasInvalid = orders.some(v => !Number.isFinite(v));
   const uniq = new Set(orders.filter(Number.isFinite));
   const hasDuplicates = uniq.size !== orders.filter(Number.isFinite).length;
 
-  // caso típico: quase tudo 9999
+ 
   const count9999 = orders.filter(v => v === 9999).length;
   const looksUninitialized = count9999 >= Math.max(3, Math.floor(sols.length * 0.5));
 
@@ -3572,8 +3442,7 @@ async function getProductsBasic(ids = []) {
 
       const { id } = req.params;
       const { dir } = req.body;
-
-      //  1) garantir orders bons (1..N) se estiverem “todos 9999”/duplicados
+ 
       await normalizeSolutionOrders();
 
       const current = await Solution.findById(id);
@@ -3581,7 +3450,7 @@ async function getProductsBasic(ids = []) {
 
       const curOrder = Number(current.order);
 
-      // 2) procurar vizinho (exclui o próprio id)
+  
       const neighborFilter =
         dir === "up"
           ? { _id: { $ne: current._id }, order: { $lt: curOrder } }
@@ -3599,7 +3468,7 @@ async function getProductsBasic(ids = []) {
 
       const nOrder = Number(neighbor.order);
 
-      // swap
+ 
       current.order = nOrder;
       neighbor.order = curOrder;
       
@@ -3618,7 +3487,6 @@ async function getProductsBasic(ids = []) {
 ); 
 
  
-  // --------- /api/solutions/:id (update) ---------
   app.put('/api/solutions/:id',
     [
       param('id').isMongoId().withMessage('id inválido'),
@@ -3641,7 +3509,7 @@ async function getProductsBasic(ids = []) {
     })
   );
 
-  // --------- /api/solutions/:id (delete) ---------
+ 
   app.delete(
     '/api/solutions/:id',
     [param('id').isMongoId().withMessage('id inválido')],
@@ -3650,8 +3518,7 @@ async function getProductsBasic(ids = []) {
       const err = ensureValid(req, res); if (err) return err;
       const { id } = req.params;
       const removed = await Solution.findByIdAndDelete(id);
-      if (!removed) return res.status(404).json({ error: 'Solução não encontrada' });
-      // cascade: apaga vínculos/filhos
+      if (!removed) return res.status(404).json({ error: 'Solução não encontrada' }); 
       await Promise.all([
         SolutionRelatedProduct.deleteMany({ solutionId: id }),
         SolutionKit.deleteMany({ solutionId: id }),
@@ -3661,8 +3528,7 @@ async function getProductsBasic(ids = []) {
     })
   );
 
-  // =============== Produtos relacionados ===============
-
+ 
  
  app.get(
   '/api/solutions/:id/products',
@@ -3727,7 +3593,6 @@ app.post(
 
 
  
-// --------- /api/solutions (list) ---------
 app.get(
   '/api/solutions/',
   [query('q').optional().isString().withMessage('q inválido')],
@@ -3770,8 +3635,7 @@ app.get(
 
 
 
-
-// --------- /api/solutions/:id/categories (add) ---------
+ 
 app.post(
   "/api/solutions/:id/categories",
   [
@@ -3795,15 +3659,14 @@ app.post(
 
     const sol = await Solution.findByIdAndUpdate(
       id,
-      { $addToSet: { categories: categoryId } }, // evita duplicados
+      { $addToSet: { categories: categoryId } },  
       { new: true }
     ).populate("categories");
 
     if (!sol) {
       return res.status(404).json({ error: "Solução não encontrada" });
     }
-
-    // devolve apenas a categoria adicionada (para o update otimista no front)
+ 
     const added = (sol.categories || []).find(
       (c) => String(c._id) === String(categoryId)
     );
@@ -3813,7 +3676,7 @@ app.post(
 );
 
 
-// --------- /api/solutions/:id/categories/:catId (remove) ---------
+ 
 app.delete(
   "/api/solutions/:id/categories/:catId",
   [
@@ -3842,11 +3705,10 @@ app.delete(
 );
 
 
-// --------- /api/solutions/:id/categories (list) ---------
+ 
 app.get(
   "/api/solutions/:id/categories",
-  [param("id").isMongoId().withMessage("id inválido")],
-  // podes permitir viewer também
+  [param("id").isMongoId().withMessage("id inválido")], 
   requireAuth(["admin", "editor", "viewer"]),
   asyncH(async (req, res) => {
     const err = ensureValid(req, res);
@@ -3869,7 +3731,7 @@ app.get(
 
 
 
-// --------- /api/categories/:catId/solutions (listar soluções de uma categoria) ---------
+ 
 app.get(
   "/api/categories/:catId/solutions",
   [
@@ -3882,23 +3744,19 @@ app.get(
     const err = ensureValid(req, res);
     if (err) return err;
 
-    const { catId } = req.params;
-
-    // 1) garantir que a categoria existe
+    const { catId } = req.params; 
     const category = await WaveledCategory.findById(catId).lean();
     if (!category) {
       return res.status(404).json({ error: "Categoria não encontrada" });
     }
 
-    // 2) procurar soluções que tenham esta categoria associada 
+ 
     const solutions = await Solution.find({
       categories: catId,
     })
-      .select("_id title image createdAt") // só os campos necessários
+      .select("_id title image createdAt")  
       .sort({ createdAt: -1 })
-      .lean();
-
-    // 3) podes devolver só nomes ou o objeto minimal da solução 
+      .lean(); 
     return res.json({
       ok: true,
       data: {
@@ -3913,8 +3771,7 @@ app.get(
   })
 ); 
 
-//=================== Kits =================== 
-
+ 
 app.get(
   '/api/solutions/:id/kits',
   [param('id').isMongoId().withMessage('id inválido')],
@@ -3988,7 +3845,7 @@ app.post(
     })
   );
 
-//=============== Exemplos =============== 
+ 
 
 app.get(
   "/api/solutions/:id/examples",
@@ -3998,15 +3855,12 @@ app.get(
     if (err) return err;
 
     const { id } = req.params;
-    const solutionId = new mongoose.Types.ObjectId(id);
-
-    // 1) Garantir que a solução existe (e apanhar categorias)
+    const solutionId = new mongoose.Types.ObjectId(id); 
     const sol = await Solution.findById(solutionId).lean();
     if (!sol) {
       return res.status(404).json({ error: "Solução não encontrada" });
     }
-
-    // Helper para remover duplicados por _id
+ 
     const uniqById = (arr) => {
       const seen = new Set();
       return (arr || []).filter((x) => {
@@ -4016,15 +3870,13 @@ app.get(
         return true;
       });
     };
-
-    // ========== 2) Exemplos diretamente associados à solução ==========
+ 
     const baseExamples = await SolutionExample.find({
       solutionId: solutionId,
     })
       .sort({ createdAt: -1 })
       .lean();
-
-    // ========== 3) Soluções relacionadas pela MESMA CATEGORIA ==========
+ 
     let relatedSolutionIdsByCategory = [];
     if (Array.isArray(sol.categories) && sol.categories.length > 0) {
       const sameCategorySolutions = await Solution.find({
@@ -4035,17 +3887,13 @@ app.get(
         .lean();
 
       relatedSolutionIdsByCategory = sameCategorySolutions.map((s) => s._id);
-    }
-
-    // ========== 4) Soluções relacionadas por PRODUTOS ==========
-    // 4.1 – produtos ligados à solução principal (SolutionRelatedProduct)
+    } 
     const relProducts = await SolutionRelatedProduct.find({
       solutionId: solutionId,
     })
       .select("productId")
       .lean();
-
-    // 4.2 – produtos ligados via kits desta solução (SolutionKit)
+ 
     const kits = await SolutionKit.find({ solutionId })
       .select("productIds")
       .lean();
@@ -4065,8 +3913,7 @@ app.get(
       .map((pid) => new mongoose.Types.ObjectId(pid));
 
     let relatedSolutionIdsByProducts = [];
-    if (productIds.length > 0) {
-      //=================== outras soluções que usam estes produtos
+    if (productIds.length > 0) { 
       const otherRels = await SolutionRelatedProduct.find({
         productId: { $in: productIds },
         solutionId: { $ne: solutionId },
@@ -4082,8 +3929,7 @@ app.get(
         .filter(Boolean)
         .map((sid) => new mongoose.Types.ObjectId(sid));
     }
-
-    //=================== 5) Exemplos (SolutionExample) das soluções relacionadas por CATEGORIA ==========
+ 
     let relatedByCategoryExamples = [];
     if (relatedSolutionIdsByCategory.length > 0) {
       relatedByCategoryExamples = await SolutionExample.find({
@@ -4092,8 +3938,7 @@ app.get(
         .sort({ createdAt: -1 })
         .lean();
     }
-
-    //================ 6) Exemplos (SolutionExample) das soluções relacionadas por PRODUTOS ==========
+ 
     let relatedByProductsExamples = [];
     if (relatedSolutionIdsByProducts.length > 0) {
       relatedByProductsExamples = await SolutionExample.find({
@@ -4102,8 +3947,7 @@ app.get(
         .sort({ createdAt: -1 })
         .lean();
     }
-
-    //=================== 7) ExampleShowcase (exemplos associados a categorias / produtos) ============
+ 
     const categoryIds = (sol.categories || []).map((c) =>
       String(c)
     );
@@ -4181,17 +4025,15 @@ app.get(
   asyncH(async (req, res) => {
     const err = ensureValid(req, res); if (err) return err;
     const { id, exampleId } = req.params;
-    const { title, description, image } = req.body || {};
-
-    // Verifica se a solução existe
+    const { title, description, image } = req.body || {}; 
     const solutionExists = await Solution.exists({ _id: id });
     if (!solutionExists) return res.status(404).json({ error: 'Solução não encontrada' });
 
-    // Verifica se o exemplo pertence à solução
+ 
     const example = await SolutionExample.findOne({ _id: exampleId, solutionId: id });
     if (!example) return res.status(404).json({ error: 'Exemplo não encontrado' });
 
-    // Atualiza apenas os campos enviados
+ 
     if (typeof title === 'string') example.title = title;
     if (typeof description === 'string') example.description = description;
     if (typeof image === 'string') example.image = image;
@@ -4237,8 +4079,7 @@ app.get(
  
 
 
-
-// ============================== “MAIS AMADOS” ================================
+ 
 app.get(
   "/api/products/top-liked", 
   limiterAuth,
@@ -4251,8 +4092,7 @@ app.get(
     ok(res, items);
   })
 );
-
-// =============================== HEALTHCHECK =================================
+ 
 app.get(
   "/health",
   asyncH(async (req, res) =>
@@ -4266,11 +4106,9 @@ app.get("/", asyncH(async (req, res) =>
   )
 ); 
 
+ 
 
-// ================================= ERRORS ====================================
-
-app.use((errMiddleware, req, res, next) => {
-  // log completo
+app.use((errMiddleware, req, res, next) => { 
   console.error(
     "Middleware erro:",
     errMiddleware && errMiddleware.stack ? errMiddleware.stack : errMiddleware
@@ -4280,13 +4118,11 @@ app.use((errMiddleware, req, res, next) => {
 
  
 async function start() {
-  try {
-    // aumenta tolerância e força IPv4 primeiro
+  try { 
     await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 20000, // 20s para escolher nó
+      serverSelectionTimeoutMS: 20000,  
       socketTimeoutMS: 45000,
-      maxPoolSize: 10,
-      // family: 4 // alternativa ao dns.setDefaultResultOrder
+      maxPoolSize: 10, 
     });
 
     console.log("MongoDB ligado");
@@ -4300,7 +4136,7 @@ async function start() {
   }
 }
 
-// logs úteis
+ 
 mongoose.connection.on("error", (e) => {
   console.error("Mongo connection error:", e?.message || e);
 });

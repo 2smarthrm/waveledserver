@@ -90,10 +90,7 @@ function parseYouTubeId(input = "") {
   return s;
 }
 
-/* ============================================================
- * TAB 1 — Vertical Solutions CRUD + reorder + favorites
- * ============================================================ */
-
+ 
 router.get(
   "/vertical-solutions",
   asyncHandler(async (req, res) => {
@@ -203,10 +200,7 @@ router.delete(
   })
 );
 
-/* ============================================================
- * TAB 2 — Megamenu Banners CRUD + reorder
- * ============================================================ */
-
+ 
 router.get(
   "/megamenu-banners",
   asyncHandler(async (_req, res) => {
@@ -298,10 +292,7 @@ router.delete(
   })
 );
 
-/* ============================================================
- * TAB 3 — Home Specials (4 slots) UPSERT por slot
- * ============================================================ */
-
+ 
 router.get(
   "/home-specials",
   asyncHandler(async (_req, res) => {
@@ -351,10 +342,7 @@ router.put(
   })
 );
 
-/* ============================================================
- * TAB 4 — Category Page Builder (mantém, legado)
- * ============================================================ */
-
+ 
 router.get(
   "/category-pages/:categoryId",
   asyncHandler(async (req, res) => {
@@ -427,7 +415,7 @@ router.put(
       ? await uploadFilesToCloudinary(twoSpecialFiles, "waveled/category-pages/two-special")
       : [];
 
-    //  wl_category NÃO entra no $set (evita conflito)
+ 
     const clean = {
       top_solutions: normalizeOrder(payload.top_solutions || []).map((x, idx) => ({
         solution: x.solution,
@@ -471,7 +459,7 @@ router.put(
       wl_updated_at: new Date(),
     };
 
-    // merge uploads
+ 
     if (featuredUrls.length) {
       const prev = clean.featured_product.images || [];
       clean.featured_product.images = [...prev, ...featuredUrls].slice(0, 10);
@@ -511,12 +499,7 @@ router.put(
   })
 );
 
-/* ============================================================
- * TAB 5 — Application Areas CRUD (já tinhas)
- * ============================================================ */
-
-// o egt que faz todas tambem deve estar pouplado comnofme fizemso no get pot arae espeficica para pegar todos os detaljhes e dados 
-
+ 
 router.get(
   "/application-areas",
   asyncHandler(async (_req, res) => {
@@ -559,7 +542,7 @@ router.get(
 
 
 
-/// cirar um endpoint como este mas que pegue todas a innves d epegar apenas uma 
+ 
 router.get(
   "/area-pages/:areaId",
   asyncHandler(async (req, res) => {
@@ -837,20 +820,16 @@ router.post(
         report.skipped += 1;
         continue;
       }
-
-      // remove _id para não colidir
+ 
       const { _id, wl_category, ...rest } = catDoc;
 
-      if (mode === "replace") {
-        // ⚠️ NÃO recomendado: troca id dentro da própria collection
-        // isto faz com que populate de "categoria" deixe de fazer sentido
+      if (mode === "replace") { 
         await WaveledCategoryPage.updateOne(
           { wl_category: categoryId },
           { $set: { wl_category: areaId, wl_updated_at: new Date() } }
         );
         report.replaced += 1;
-      } else {
-        //  copy: cria/upsert no builder por área
+      } else { 
         await WaveledAreaPage.findOneAndUpdate(
           { wl_area: areaId },
           {
@@ -901,7 +880,7 @@ router.get(
     if (!doc) {
       return ok(res, {
         wl_area: areaId,
-        content_menu: [], // ✅ NOVO
+        content_menu: [],  
         top_solutions: [],
         featured_product: { product: null, images: [], title: "", description: "" },
         slider_solutions: [],
