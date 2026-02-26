@@ -781,7 +781,7 @@ function safeUnlinkUpload(removed) {
  
  
 const INTERNAL_RECIPIENTS = [ 
-  {email:"fabio.catela@exportech.com.pt", name:"Fábio"}
+  {email:"kiosso.silva@exportech.com.pt", name:"Kiosso"}
 ];
 
  
