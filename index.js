@@ -986,7 +986,7 @@ text-decoration: none
                       <table class="t8" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
                         <tr><td class="t7" style="padding:0 0 22px 0;">
                           <p class="t6" style="margin:0;font-family:Roboto,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif;line-height:22px;font-weight:400;font-size:16px;color:#333333;text-align:left;mso-line-height-rule:exactly;">
-                            Data: ${dataStr}
+                            Data de envio: ${dataStr}
                           </p>
                         </td></tr>
                       </table>
@@ -1082,7 +1082,7 @@ text-decoration: none
                 <div style="font-size:0px;">
                   ${
                     produtoImagem
-                      ? `<img class="t53" style="display:block;border:0;height:auto;width:100%;Margin:0;max-width:100%;" width="90" alt="Imagem do produto" src="${produtoImagem}" />`
+                      ? `<img class="t53" style="display:block;border:0;height:auto;width:100%;Margin:0;max-width:100%;" width="90" alt="waveled Imagem do produto" src="${produtoImagem}" />`
                       : `<div style="width:90px;height:90px;border:1px solid #ccc;background:#fafafa;font-size:11px;color:#777;display:flex;align-items:center;justify-content:center;">Sem imagem</div>`
                   }
                 </div>
