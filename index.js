@@ -59,6 +59,7 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "https://waveled.vercel.app",
   "https://waveled-pspo.vercel.app",
+  "https://waveleddarkmode.vercel.app",
   "http://localhost:5174",
   "http://localhost:5176",
   "https://waveledadmin.vercel.app",
