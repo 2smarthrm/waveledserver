@@ -717,7 +717,7 @@ app.post(
     try {
       await transporter.sendMail({
         from:'"Waveled" <no-reply@waveled.pt>',
-        to: "comercial@waveled.pt, geral@waveled.pt",
+        to:["sales@waveled.com", "fabio.catela@exportech.com.pt", "kiosso.silva@exportech.com.pt"]  ,
         subject: `Waveled • Novo pedido (${payload.tipo}) de ${payload.nome}`,
         html,
       });
